@@ -26,7 +26,7 @@ type Target =
 
 const TARGETS: Record<string, Target> = {
   "directory.meandmybadself.com": { kind: "host", host: "directory.eisenhower.school" },
-  "ptomeet.eisenhower.school": { kind: "url", url: "https://meet.google.com/res-vvmu-kaa" },
+  "ptomeet.eisenhower.school": { kind: "url", url: "https://meet.google.com/foc-ohox-vye" },
 };
 
 export function redirectFor(request: Request): Response {

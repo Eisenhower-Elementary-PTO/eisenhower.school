@@ -16,7 +16,7 @@ describe("hostname redirector", () => {
     for (const path of ["/", "/anything?x=1"]) {
       const res = redirectFor(new Request(`https://ptomeet.eisenhower.school${path}`));
       expect(res.status).toBe(302);
-      expect(res.headers.get("location")).toBe("https://meet.google.com/res-vvmu-kaa");
+      expect(res.headers.get("location")).toBe("https://meet.google.com/foc-ohox-vye");
     }
   });
 
