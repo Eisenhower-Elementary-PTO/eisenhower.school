@@ -783,10 +783,11 @@ function unescapeAttr(v: string): string {
  *  renderer being the allowlist of record (invariant 9). `ctx` is the one the
  *  BODY rendered with: numbers continue from the body's, and a footer link
  *  repeating a body link reuses its number instead of drawing a second code.
- *  The returned column floats into a rail the FOOTER reserves for itself
- *  (`nl-body-rail` on `.nl-foot`, set by the caller when `col` is non-empty),
- *  so a footer without links keeps its full measure. Email mode has no
- *  `linkQrs` and passes through untouched. */
+ *  Unlike a body block's column, the returned codes render as one CENTERED
+ *  HORIZONTAL ROW beneath the footer's text (`nl-qr-foot`, placed by the
+ *  caller after `inner`) — the footer ends the page, so there is no prose
+ *  beside it for a rail to keep clear of. A footer without links draws
+ *  nothing. Email mode has no `linkQrs` and passes through untouched. */
 function footerQrs(html: string, ctx: Ctx): { inner: string; col: string } {
   if (!ctx.linkQrs || !html.includes("<a")) return { inner: html, col: "" };
   const outer = ctx.qrSink;
@@ -809,7 +810,7 @@ function footerQrs(html: string, ctx: Ctx): { inner: string; col: string } {
   });
   ctx.qrSink = outer;
   if (sink.length === 0) return { inner, col: "" };
-  return { inner, col: `<span class="nl-qr-col" aria-hidden="true">${sink.join("")}</span>` };
+  return { inner, col: `<span class="nl-qr-foot" aria-hidden="true">${sink.join("")}</span>` };
 }
 
 function renderChildren(nodes: NewsletterNode[] | undefined, ctx: Ctx): string {
@@ -1481,9 +1482,10 @@ export function renderNewsletterIssuePageHtml(input: NewsletterIssuePageInput): 
     : "";
 
   const foot = [
-    // Column first so it floats out of the rail-padded box from the top of the
-    // footer, exactly as a body block's column does (qrBlock).
-    `${footer.col}${footer.inner}`,
+    // The footer's codes go in one centered row BENEATH its text (nl-qr-foot),
+    // not in the body's right-margin rail — nothing sits beside the footer for
+    // a rail to protect, and a row reads as the issue's standing links.
+    `${footer.inner}${footer.col}`,
     input.archiveHref
       ? `<p style="margin:8px 0 0"><a href="${escapeHtml(input.archiveHref)}">See all issues</a></p>`
       : "",
@@ -1539,7 +1541,7 @@ export function renderNewsletterIssuePageHtml(input: NewsletterIssuePageInput): 
         <div class="nl-body${body.includes('class="nl-qr-col"') ? " nl-body-rail" : ""}">
 ${body}
         </div>
-        <div class="nl-foot${footer.col ? " nl-body-rail" : ""}">
+        <div class="nl-foot">
           ${foot}
         </div>
       </article>
@@ -1607,15 +1609,18 @@ export const NEWSLETTER_PRINT_RULES = `
      qrBlock). The body reserves the rail once, so every block has the same
      measure; each block's codes float into it with a negative margin as wide
      as the rail, which keeps them out of the text entirely, and clear the
-     previous block's codes rather than overlap them. The footer's links get
-     the same treatment (footerQrs): .nl-foot reserves its own rail only when
-     it holds a code, so a footer without links keeps its full measure. */
+     previous block's codes rather than overlap them. The FOOTER's codes
+     (footerQrs) do not use the rail: they sit in one centered row beneath the
+     footer's text (.nl-qr-foot) — the footer ends the page, so there is no
+     prose beside it for a rail to keep clear of. */
   .nl-body-rail{padding-right:1.2in}
   .nl-body-rail::after{content:"";display:block;clear:both}
   .nl-qr-col{display:flex;flex-direction:column;gap:.1in;float:right;clear:right;width:.95in;margin:2px -1.2in .1in 0;break-inside:avoid;page-break-inside:avoid}
   .nl-qr-item{display:flex;align-items:flex-start;justify-content:flex-end;gap:.05in}
   .nl-qr-num{font-size:9pt;font-weight:700;line-height:1;margin-top:calc(.75in * var(--qz, 0) - .125em);color:${INK}}
   .nl-qr-col svg{display:block;width:.75in;height:.75in;flex:none}
+  .nl-qr-foot{display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:.2in;margin-top:.15in;break-inside:avoid;page-break-inside:avoid}
+  .nl-qr-foot svg{display:block;width:.75in;height:.75in;flex:none}
   /* The number after a link that matches the one beside its code. */
   .nl-qr-ref{display:inline;font-size:.7em;font-weight:700;line-height:0;margin-left:1px;vertical-align:super;color:${INK}}
 `.trimEnd();
@@ -1669,6 +1674,7 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-event-volunteer-link:hover{text-decoration:underline}
 .nl-qr{display:none}
 .nl-qr-col{display:none}
+.nl-qr-foot{display:none}
 .nl-qr-ref{display:none}
 .nl-foot{margin-top:22px;padding-top:18px;border-top:1px solid ${RULE};font-size:13px;line-height:1.6;color:${MUTED}}
 .nl-archive-item{display:block;background:${PAPER};border-radius:12px;padding:18px 20px;margin-bottom:12px;text-decoration:none;color:${INK};box-shadow:0 1px 3px rgba(16,24,40,.06)}

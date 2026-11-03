@@ -221,6 +221,7 @@ describe("a printed QR code beside each link in the body", () => {
     const screen = NEWSLETTER_WEB_CSS.slice(0, printAt);
     const print = NEWSLETTER_WEB_CSS.slice(printAt);
     expect(screen).toContain(".nl-qr-col{display:none}");
+    expect(screen).toContain(".nl-qr-foot{display:none}");
     expect(screen).toContain(".nl-qr-ref{display:none}");
     expect(screen).not.toContain(".nl-body-rail");
     const rail = print.match(/\.nl-body-rail\{padding-right:([\d.]+)in\}/);
@@ -231,6 +232,13 @@ describe("a printed QR code beside each link in the body", () => {
     // Nothing may size a block by its codes again: that is what made blocks
     // with links taller and narrower than the ones without.
     expect(print).not.toMatch(/min-height/);
+    // The footer's row is horizontal and centered, and never floated into the
+    // rail — it sits in the page's own flow beneath the footer text.
+    const footRow = print.match(/\.nl-qr-foot\{([^}]*)\}/);
+    expect(footRow).not.toBeNull();
+    expect(footRow![1]).toContain("flex-direction:row");
+    expect(footRow![1]).toContain("justify-content:center");
+    expect(footRow![1]).not.toContain("float");
   });
 
   it("tells each number how far the code's quiet zone drops the black modules", () => {
@@ -252,11 +260,12 @@ describe("a printed QR code beside each link in the body", () => {
     const print = NEWSLETTER_WEB_CSS.slice(NEWSLETTER_WEB_CSS.indexOf("@media print"));
     const size = (sel: string) => print.match(new RegExp(`${sel.replace(/\./g, "\\.")} svg\\{[^}]*width:([\\d.]+in);height:([\\d.]+in)`))!.slice(1);
     expect(size(".nl-qr")).toEqual(size(".nl-qr-col"));
+    expect(size(".nl-qr")).toEqual(size(".nl-qr-foot"));
     // And the margin the number's drop is computed against is that same size.
     expect(size(".nl-qr-col")[0]).toBe(".75in");
   });
 
-  it("and beside each link in the admin's footer, in a rail the footer reserves", () => {
+  it("and for each link in the admin's footer, in a centered row beneath it", () => {
     // The footer goes through sanitizeFooterHtml first, like a real save: what
     // the page renders is the STORED form, escaped hrefs and all.
     const footPage = (footer: string, doc: NewsletterNode = DOC) =>
@@ -279,14 +288,16 @@ describe("a printed QR code beside each link in the body", () => {
         content: [{ type: "paragraph", content: [{ type: "text", text: "go", marks: [{ type: "link", attrs: { href } }] }] }],
       }) as NewsletterNode;
 
-    // The code, its column, and the matching superscript — all inside the foot.
+    // The code, its row, and the matching superscript — all inside the foot,
+    // with the row AFTER the footer's own markup, not floated beside it.
     const html = footPage('<p>Visit <a href="https://pto.eisenhower.school">the PTO</a></p>');
     const foot = html.slice(html.indexOf('<div class="nl-foot'));
-    expect(foot).toMatch(/^<div class="nl-foot nl-body-rail">\s*<span class="nl-qr-col" aria-hidden="true"><span class="nl-qr-item" style="--qz:0\.\d{4}"><span class="nl-qr-num">1<\/span><svg /);
+    expect(foot).toMatch(/^<div class="nl-foot">\s*<p>Visit <a /);
+    expect(foot).toMatch(/<\/p><span class="nl-qr-foot" aria-hidden="true"><span class="nl-qr-item" style="--qz:0\.\d{4}"><span class="nl-qr-num">1<\/span><svg /);
     expect(foot).toContain('>the PTO</a><sup class="nl-qr-ref">1</sup>');
-    // The footer's rail is its own: a body without codes reserves none.
+    // The footer never reserves the body's rail; a body without codes doesn't either.
     expect(html).toContain('class="nl-body"');
-    expect(html).not.toContain("nl-body nl-body-rail");
+    expect(html).not.toContain("nl-body-rail");
 
     // Numbers run on from the body's, and a destination the body already
     // carries reuses its number instead of drawing a second code.
@@ -309,10 +320,10 @@ describe("a printed QR code beside each link in the body", () => {
     expect((amp.match(/<svg /g) ?? []).length).toBe(1);
     expect(amp).toContain('>again</a><sup class="nl-qr-ref">1</sup>');
 
-    // A footer without links keeps its full measure, and nothing is drawn.
+    // A footer without links draws nothing, not even an empty row.
     const plain = footPage("<p>The PTO Board</p>");
     expect(plain).toContain('<div class="nl-foot">');
-    expect(plain).not.toContain("nl-foot nl-body-rail");
+    expect(plain).not.toContain("nl-qr-foot");
     expect(plain).not.toContain("nl-qr-col");
 
     // The email's footer stays exactly as it was (it can't hide a code on screen).
