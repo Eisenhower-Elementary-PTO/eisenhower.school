@@ -774,8 +774,10 @@ function unescapeAttr(v: string): string {
 }
 
 /** The admin's footer with a printed code for each of its links, like the
- *  body's (`qrBlock`) — the footer is where an issue's standing links live (the
- *  PTO site, a board address), and paper flattens those like any other. The
+ *  body's (`qrBlock`). The footer itself no longer PRINTS (`.nl-foot` is
+ *  hidden in NEWSLETTER_PRINT_RULES), so these codes are dormant on paper;
+ *  the markup is kept so the screen page is unchanged and one CSS line
+ *  brings the footer, codes and all, back to print. The
  *  footer is stored HTML rather than TipTap (sanitizeFooterHtml's one seam), so
  *  its links are found by scanning the anchors — safe on sanitizer output,
  *  whose attribute values cannot hold a raw angle bracket — and each href is
@@ -1461,10 +1463,11 @@ export function renderNewsletterIssuePageHtml(input: NewsletterIssuePageInput): 
     calendarUrl: branding.calendarUrl,
   });
   const body = renderNode(input.doc, ctx);
-  // The admin's footer links get codes too — a printed footer is where the
-  // issue's standing links (the PTO site, a board address) go dead otherwise.
-  // Only the footer: "See all issues" and "View as PDF" below it are this
-  // page's navigation, not the issue's content, and both are hidden in print.
+  // The footer renders for the SCREEN page only — the whole .nl-foot block
+  // (the admin's footer, its link codes, "See all issues", "View as PDF") is
+  // hidden on paper by NEWSLETTER_PRINT_RULES. The printed copy ends with the
+  // issue's content, and its .nl-qr code leads back to the live page where
+  // the footer's links work.
   const footer = footerQrs(footerHtmlOf(branding), ctx);
 
   const mark = branding.logoUrl
@@ -1599,7 +1602,12 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-event,.nl-li,.nl-img,.nl-quote,.nl-table tr{break-inside:avoid;page-break-inside:avoid}
   /* Nothing on paper is clickable, so an accent-coloured title is just noise. */
   .nl-event-title-link{color:${INK}}
-  .nl-foot{break-inside:avoid}
+  /* The whole footer stays off paper — the admin's footer HTML, its link
+     codes and the page's navigation alike. The printed copy ends with the
+     issue's content; the .nl-qr code beside the title already leads back to
+     the live page, where the footer's links work. The .nl-qr-foot rules
+     below are kept against the day the footer returns to print. */
+  .nl-foot{display:none}
   /* Floated so the title, subtitle and date wrap beside it rather than
      starting below a square of white space. */
   .nl-qr{display:block;float:right;width:.75in;margin:0 0 10px 18px;text-align:center}

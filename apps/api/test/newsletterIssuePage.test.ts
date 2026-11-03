@@ -232,6 +232,13 @@ describe("the print stylesheet", () => {
     expect(NEWSLETTER_WEB_CSS).toMatch(/@media print\{[\s\S]*\.nl-print-link/);
   });
 
+  it("hides the footer on paper — the printed copy ends with the issue's content", () => {
+    const printAt = NEWSLETTER_WEB_CSS.indexOf("@media print");
+    expect(NEWSLETTER_WEB_CSS.slice(printAt)).toContain(".nl-foot{display:none}");
+    // On screen the footer stays — the hide must live in the print block only.
+    expect(NEWSLETTER_WEB_CSS.slice(0, printAt)).not.toMatch(/\.nl-foot\{[^}]*display:none/);
+  });
+
   it("keeps the draft banner in ink — that is when it matters most", () => {
     const printBlock = NEWSLETTER_WEB_CSS.slice(NEWSLETTER_WEB_CSS.indexOf("@media print"));
     expect(printBlock).not.toContain("nl-draft-banner");
