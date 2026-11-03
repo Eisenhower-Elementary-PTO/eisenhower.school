@@ -21,3 +21,8 @@ custom_domain = true
 [[env.production.routes]]
 pattern = "ptomeet.eisenhower.school"
 custom_domain = true
+
+# Vanity host for the shared Google Drive folder.
+[[env.production.routes]]
+pattern = "drive.eisenhower.school"
+custom_domain = true

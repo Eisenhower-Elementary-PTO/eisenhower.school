@@ -20,6 +20,16 @@ describe("hostname redirector", () => {
     }
   });
 
+  it("sends drive to the shared Drive folder, account-neutral, temporarily", () => {
+    for (const path of ["/", "/anything?x=1"]) {
+      const res = redirectFor(new Request(`https://drive.eisenhower.school${path}`));
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toBe("https://drive.google.com/drive/folders/0AGwIfsptxtdbUk9PVA");
+      expect(location).not.toMatch(/\/u\/\d/);
+    }
+  });
+
   it("404s a host it does not own", () => {
     expect(redirectFor(new Request("https://example.com/")).status).toBe(404);
   });

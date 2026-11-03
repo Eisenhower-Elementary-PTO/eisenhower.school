@@ -27,6 +27,10 @@ type Target =
 const TARGETS: Record<string, Target> = {
   "directory.meandmybadself.com": { kind: "host", host: "directory.eisenhower.school" },
   "ptomeet.eisenhower.school": { kind: "url", url: "https://meet.google.com/foc-ohox-vye" },
+  // The shared Drive folder. Account-neutral URL on purpose: a /u/N/ segment
+  // pins the link to one slot in ONE person's signed-in account list; without
+  // it Google picks whichever of the visitor's accounts has access.
+  "drive.eisenhower.school": { kind: "url", url: "https://drive.google.com/drive/folders/0AGwIfsptxtdbUk9PVA" },
 };
 
 export function redirectFor(request: Request): Response {
