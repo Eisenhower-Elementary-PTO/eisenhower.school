@@ -22,6 +22,7 @@ import type {
   LfItemPatch,
   LfPublicItemDTO,
   LfPublicListDTO,
+  LfSettingsDTO,
   LfStaffItemDTO,
   LfStaffItemDetailDTO,
   Locale,
@@ -179,4 +180,7 @@ export const api = {
   // ── Settings (system admin) ──
   groups: () => request<{ groups: { id: string; name: string; memberCount: number }[] }>("/lostfound/groups"),
   setGroup: (groupId: string | null) => request<LfAccessDTO>("/lostfound/settings", put({ groupId })),
+  settings: () => request<LfSettingsDTO>("/lostfound/settings"),
+  setClaimEmails: (emails: string[]) =>
+    request<LfSettingsDTO>("/lostfound/settings/claim-emails", put({ emails })),
 };

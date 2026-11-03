@@ -1,7 +1,7 @@
 // Lost & found, the signed-in half. Every route needs a session AND the roster
 // gate (`lostFoundAccess`, the `rosterAccess` PTO and the newsletter share —
 // invariant 31), with four exceptions: `/access` answers any session (a member
-// who isn't staff needs an answer, not a spinner); the two settings routes are
+// who isn't staff needs an answer, not a spinner); the settings routes are
 // system-admin only; and SUBMITTING a found item — `POST /items` plus the
 // thumbnail PUT on an item the caller created — is open to ANY session. That
 // is safe because a member-submitted item stays HELD until staff publish it,
@@ -27,9 +27,11 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { AuthContext, HonoEnv } from "../env.js";
-import { setSetting } from "../lib/db.js";
+import { getSetting, normalizeEmail, setSetting } from "../lib/db.js";
+import { isEmail } from "../lib/newsletter.js";
 import { ulid } from "../lib/ids.js";
 import {
+  LOSTFOUND_CLAIM_NOTIFY_SETTING,
   LOSTFOUND_GROUP_SETTING,
   MAX_PHOTO_BYTES,
   MAX_THUMB_BYTES,
@@ -42,6 +44,7 @@ import {
   isJpegBytes,
   lostFoundAccess,
   markPending,
+  parseClaimNotifyEmails,
   retagStuck,
   saveFields,
   staffItemOf,
@@ -53,7 +56,7 @@ import {
 } from "../lib/lostFound.js";
 import { genericGroups, groupExists } from "../lib/rosterGate.js";
 import { DAYS, nowIso } from "../lib/time.js";
-import { LF_DONATE_AFTER_DAYS } from "@sd/shared";
+import { LF_CLAIM_NOTIFY_MAX, LF_DONATE_AFTER_DAYS } from "@sd/shared";
 import type { AuditAction } from "@sd/shared";
 
 const JPEG = "image/jpeg";
@@ -141,6 +144,55 @@ lostFound.put(
       detail: { groupId: groupId || null },
     });
     return c.json(await lostFoundAccess(c.env, auth));
+  }),
+);
+
+/** GET /lostfound/settings — the rest of the configuration (the staff group
+ *  rides /access). System admin only, like the writes it mirrors. */
+lostFound.get(
+  "/settings",
+  guarded(async (c) => {
+    if (!requireAuth(c).isSystemAdmin) return c.json({ error: "forbidden" }, 403);
+    return c.json({
+      claimNotifyEmails: parseClaimNotifyEmails(await getSetting(c.env, LOSTFOUND_CLAIM_NOTIFY_SETTING)),
+    });
+  }),
+);
+
+/** PUT /lostfound/settings/claim-emails { emails } — who is mailed when a
+ *  public claim is stored. An invalid address is a 400 naming it, never a
+ *  silently dropped entry — an admin who typo'd the office's address must not
+ *  believe the office is on the list. An empty list turns the mail off. */
+lostFound.put(
+  "/settings/claim-emails",
+  guarded(async (c) => {
+    if (!requireAuth(c).isSystemAdmin) return c.json({ error: "forbidden" }, 403);
+    const body = await c.req.json<{ emails?: unknown }>().catch(() => null);
+    if (!body || !Array.isArray(body.emails)) {
+      return c.json({ error: "invalid", message: "A list of addresses is required." }, 400);
+    }
+    const emails: string[] = [];
+    for (const raw of body.emails) {
+      const email = typeof raw === "string" ? normalizeEmail(raw) : "";
+      if (!email) continue; // blank lines in a textarea are not a mistake
+      if (!isEmail(email)) {
+        return c.json({ error: "invalid", message: `Not an email address: ${email.slice(0, 100)}` }, 400);
+      }
+      if (!emails.includes(email)) emails.push(email);
+    }
+    if (emails.length > LF_CLAIM_NOTIFY_MAX) {
+      return c.json({ error: "invalid", message: `At most ${LF_CLAIM_NOTIFY_MAX} addresses.` }, 400);
+    }
+    await setSetting(c.env, LOSTFOUND_CLAIM_NOTIFY_SETTING, JSON.stringify(emails));
+    // Count only: the current value is readable from the setting, and an
+    // audit row — personal addresses included — is forever (invariant 5).
+    c.var.audit.push({
+      action: "lostfound.claim_notify.configured",
+      entityKind: "setting",
+      entityId: LOSTFOUND_CLAIM_NOTIFY_SETTING,
+      detail: { count: emails.length },
+    });
+    return c.json({ claimNotifyEmails: emails });
   }),
 );
 

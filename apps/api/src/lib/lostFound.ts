@@ -32,9 +32,11 @@
 // eyes before publishing, so a name the model misfiled as not-a-name still
 // passes a person on its way to the public page.
 
-import { LF_CATEGORIES, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS } from "@sd/shared";
+import { LF_CATEGORIES, LF_CLAIM_NOTIFY_MAX, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS } from "@sd/shared";
 import type { LfClaimDTO, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
 import type { AuthContext, Env } from "../env.js";
+import { getSetting } from "./db.js";
+import { lostFoundClaimEmail, sendEmail } from "./email.js";
 import { rosterAccess, type RosterAccess } from "./rosterGate.js";
 import { DAYS, nowIso } from "./time.js";
 
@@ -49,6 +51,54 @@ export const LOSTFOUND_GROUP_SETTING = "lostfound_staff_group_id";
  *  Person they create (invariant 27). */
 export function lostFoundAccess(env: Env, auth: AuthContext): Promise<RosterAccess> {
   return rosterAccess(env, LOSTFOUND_GROUP_SETTING, auth);
+}
+
+/** The `setting` key holding the addresses mailed when a public claim is
+ *  stored — a JSON array, written only by the system-admin settings route. */
+export const LOSTFOUND_CLAIM_NOTIFY_SETTING = "lostfound_claim_notify_emails";
+
+/** The stored value back as a list. Forgiving on read — the write side
+ *  validates, but a hand-edited or legacy value must come back as "whatever
+ *  addresses are recognisable", never as a throw on the claim path. */
+export function parseClaimNotifyEmails(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const out: string[] = [];
+    for (const v of parsed) {
+      if (typeof v !== "string") continue;
+      const email = v.trim().toLowerCase();
+      if (email && email.includes("@") && !out.includes(email)) out.push(email);
+    }
+    return out.slice(0, LF_CLAIM_NOTIFY_MAX);
+  } catch {
+    return [];
+  }
+}
+
+/** Mail the configured addresses that a claim just arrived. Called from the
+ *  public claim route's `waitUntil`, AFTER the claim row committed — only a
+ *  STORED claim notifies, so the honeypot and the caps bound this exactly as
+ *  they bound the rows (a suppressed claim must not become email instead).
+ *  Never throws, and sends nothing when no address is configured. The message
+ *  carries the item's title and the queue link, never the claimant
+ *  (lostFoundClaimEmail's comment). */
+export async function notifyLostFoundClaim(env: Env, itemTitle: string): Promise<void> {
+  try {
+    const recipients = parseClaimNotifyEmails(await getSetting(env, LOSTFOUND_CLAIM_NOTIFY_SETTING));
+    if (recipients.length === 0) return;
+    const msg = lostFoundClaimEmail(env, itemTitle);
+    for (const to of recipients) {
+      try {
+        await sendEmail(env, { ...msg, to });
+      } catch (err) {
+        console.error(`[lostfound] claim notification failed to=${to}: ${String(err)}`);
+      }
+    }
+  } catch (err) {
+    console.error(`[lostfound] claim notification failed: ${String(err)}`);
+  }
 }
 
 // ── Rows and projections ────────────────────────────────────────────────────

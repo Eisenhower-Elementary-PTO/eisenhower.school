@@ -2114,6 +2114,19 @@ export interface LfAccessDTO {
   groupId: string | null;
 }
 
+/** GET /lostfound/settings — the lost & found's admin-editable configuration
+ *  beyond the staff group (which rides `LfAccessDTO`). */
+export interface LfSettingsDTO {
+  /** Addresses mailed the moment a public claim is stored — typed by a system
+   *  admin on the settings screen. The message names the item and links to the
+   *  staff queue; claimant details stay behind the session (lib/email.ts). */
+  claimNotifyEmails: string[];
+}
+
+/** Most addresses `claimNotifyEmails` may hold — a notification list, not a
+ *  mailing list. */
+export const LF_CLAIM_NOTIFY_MAX = 10;
+
 /** Days after which an unclaimed item is flagged for donation. */
 export const LF_DONATE_AFTER_DAYS = 120;
 
@@ -2370,6 +2383,10 @@ export type AuditAction =
   | "lostfound.claim.dismissed"
   /** A system admin named the group whose roster runs the lost & found. */
   | "lostfound.staff.configured"
+  /** A system admin changed who is emailed when a claim arrives. `detail`
+   *  carries the count only — the addresses are readable from the setting, and
+   *  an audit row is forever. */
+  | "lostfound.claim_notify.configured"
   /** The bingo board changed (migration 0040) — a number toggled, or the game
    *  reset. One action for both: `detail` carries the counts, and a reset is
    *  legible as `marked` dropping to 0. One row per PUT, which is one tap

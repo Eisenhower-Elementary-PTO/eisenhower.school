@@ -20,6 +20,7 @@ import {
   isListed,
   itemIdOfKey,
   normalizeContact,
+  parseClaimNotifyEmails,
   publicItemOf,
   saveFields,
   staffItemOf,
@@ -214,10 +215,96 @@ describe("the routes outside the staff gate", () => {
     expect(await res.json()).toMatchObject({ canUse: false, isSystemAdmin: false, groupName: "Front office" });
   });
 
-  it("the staff-group settings are system-admin only, even for staff", async () => {
+  it("the settings routes are system-admin only, even for staff", async () => {
     const staff = appWith(auth("01U_STAFF"));
     expect((await call(staff, "GET", "/lostfound/groups", undefined, gateEnv(true))).status).toBe(403);
     expect((await call(staff, "PUT", "/lostfound/settings", { groupId: GROUP }, gateEnv(true))).status).toBe(403);
+    expect((await call(staff, "GET", "/lostfound/settings", undefined, gateEnv(true))).status).toBe(403);
+    expect(
+      (await call(staff, "PUT", "/lostfound/settings/claim-emails", { emails: [] }, gateEnv(true))).status,
+    ).toBe(403);
+  });
+});
+
+// ── Claim notification settings ─────────────────────────────────────────────
+
+describe("PUT /lostfound/settings/claim-emails", () => {
+  /** D1 stand-in: the stored setting, and a log of writes to it. */
+  function settingsEnv(stored: string | null = null) {
+    const writes: { sql: string; args: unknown[] }[] = [];
+    const env = {
+      DB: {
+        prepare(sql: string) {
+          return {
+            bind: (...args: unknown[]) => ({
+              async first() {
+                if (sql.includes("FROM setting")) return stored === null ? null : { value: stored };
+                throw new Error(`settingsEnv: unhandled first: ${sql}`);
+              },
+              async run() {
+                writes.push({ sql, args });
+                return { meta: { changes: 1 } };
+              },
+            }),
+          };
+        },
+      },
+    } as unknown as HonoEnv["Bindings"];
+    return { env, writes };
+  }
+
+  async function putEmails(body: unknown, stored: string | null = null) {
+    const audit: AuditDraft[] = [];
+    const { env, writes } = settingsEnv(stored);
+    const res = await call(appWith(auth("01U_ADMIN", true), audit), "PUT", "/lostfound/settings/claim-emails", body, env);
+    return { res, writes, audit };
+  }
+
+  it("saves normalized, deduplicated addresses and audits a COUNT, never the addresses", async () => {
+    const { res, writes, audit } = await putEmails({ emails: [" Office@School.example ", "office@school.example", "", "pto@x.org"] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ claimNotifyEmails: ["office@school.example", "pto@x.org"] });
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.args).toContain(JSON.stringify(["office@school.example", "pto@x.org"]));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!).toMatchObject({ action: "lostfound.claim_notify.configured", detail: { count: 2 } });
+    expect(JSON.stringify(audit[0])).not.toContain("office@school.example");
+  });
+
+  it("refuses the whole save on one bad address — a typo must not read as saved", async () => {
+    const { res, writes, audit } = await putEmails({ emails: ["office@school.example", "not-an-address"] });
+    expect(res.status).toBe(400);
+    expect(writes).toEqual([]);
+    expect(audit).toEqual([]);
+  });
+
+  it("refuses more than the cap, a missing list, and an empty list turns the mail off", async () => {
+    expect((await putEmails({ emails: Array.from({ length: 11 }, (_, i) => `a${i}@x.org`) })).res.status).toBe(400);
+    expect((await putEmails({})).res.status).toBe(400);
+    const off = await putEmails({ emails: [] });
+    expect(off.res.status).toBe(200);
+    expect(await off.res.json()).toEqual({ claimNotifyEmails: [] });
+  });
+
+  it("GET /lostfound/settings reads the stored list back", async () => {
+    const { env } = settingsEnv(JSON.stringify(["office@school.example"]));
+    const res = await call(appWith(auth("01U_ADMIN", true)), "GET", "/lostfound/settings", undefined, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ claimNotifyEmails: ["office@school.example"] });
+  });
+});
+
+describe("parseClaimNotifyEmails", () => {
+  it("is forgiving on read: garbage, non-arrays and non-strings come back as what's recognisable", () => {
+    expect(parseClaimNotifyEmails(null)).toEqual([]);
+    expect(parseClaimNotifyEmails("not json")).toEqual([]);
+    expect(parseClaimNotifyEmails('{"a":1}')).toEqual([]);
+    expect(parseClaimNotifyEmails('["Office@X.org", 3, "office@x.org", "no-at-sign", ""]')).toEqual(["office@x.org"]);
+  });
+
+  it("caps the list even when the stored value is longer", () => {
+    const many = JSON.stringify(Array.from({ length: 20 }, (_, i) => `a${i}@x.org`));
+    expect(parseClaimNotifyEmails(many)).toHaveLength(10);
   });
 });
 
@@ -512,11 +599,18 @@ describe("normalizeContact", () => {
 
 // ── The claim form ──────────────────────────────────────────────────────────
 
-/** D1 stand-in for the claim route: one item, configurable counts, and a log
- *  of every write. */
-function claimEnv(opts: { item?: LfItemRow | null; total?: number; mine?: number; open?: number }) {
+/** D1 + EMAIL stand-ins for the claim route: one item, configurable counts,
+ *  the notification setting, a log of every write, and every message the
+ *  Cloudflare binding was handed (both its halves set, so `sendEmail` takes
+ *  the binding rather than the dev console log). */
+function claimEnv(opts: { item?: LfItemRow | null; total?: number; mine?: number; open?: number; notify?: string[] }) {
   const writes: string[] = [];
+  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
   const env = {
+    BULK_EMAIL_FROM: "Lost & Found <lostfound@sitemail.eisenhower.school>",
+    EMAIL: { send: async (msg: (typeof sent)[number]) => void sent.push(msg) },
+    SCHOOL_NAME: "Eisenhower",
+    LOSTFOUND_URL: "https://lostandfound.eisenhower.school",
     DB: {
       prepare(sql: string) {
         return {
@@ -524,6 +618,7 @@ function claimEnv(opts: { item?: LfItemRow | null; total?: number; mine?: number
             async first() {
               if (sql.includes("FROM lf_item WHERE id")) return opts.item === undefined ? row() : opts.item;
               if (sql.includes("AS total")) return { total: opts.total ?? 0, mine: opts.mine ?? 0, open: opts.open ?? 0 };
+              if (sql.includes("FROM setting")) return opts.notify ? { value: JSON.stringify(opts.notify) } : null;
               throw new Error(`claimEnv: unhandled: ${sql}`);
             },
             async run() {
@@ -535,7 +630,7 @@ function claimEnv(opts: { item?: LfItemRow | null; total?: number; mine?: number
       },
     },
   } as unknown as HonoEnv["Bindings"];
-  return { env, writes };
+  return { env, writes, sent };
 }
 
 describe("POST /lostfound-public/items/:id/claims", () => {
@@ -543,9 +638,19 @@ describe("POST /lostfound-public/items/:id/claims", () => {
 
   async function post(body: unknown, opts: Parameters<typeof claimEnv>[0] = {}) {
     const audit: AuditDraft[] = [];
-    const { env, writes } = claimEnv(opts);
-    const res = await call(appWith(null, audit), "POST", "/lostfound-public/items/01ITEM/claims", body, env);
-    return { status: res.status, json: await res.json(), writes, audit };
+    const { env, writes, sent } = claimEnv(opts);
+    // Collect waitUntil promises so the notification (fired after the row
+    // commits) has finished before anything is asserted.
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p) } as unknown as ExecutionContext;
+    const res = await appWith(null, audit).request(
+      "/lostfound-public/items/01ITEM/claims",
+      { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } },
+      env,
+      ctx,
+    );
+    await Promise.all(pending);
+    return { status: res.status, json: await res.json(), writes, audit, sent };
   }
 
   it("stores a claim, audits it with no claimant details, and answers ok", async () => {
@@ -558,21 +663,39 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     expect(JSON.stringify(r.audit[0])).not.toMatch(/Pat|example\.com|Dent/);
   });
 
-  it("answers identically — and stores nothing — for a honeypot, a cap, or an unlisted item", async () => {
+  it("mails each configured address — the item's title and the queue link, never the claimant", async () => {
+    const r = await post(claim, { notify: ["office@school.example", "pto@x.org"] });
+    expect(r.json).toEqual({ ok: true });
+    expect(r.sent.map((m) => m.to)).toEqual(["office@school.example", "pto@x.org"]);
+    for (const m of r.sent) {
+      expect(m.subject).toContain("Blue water bottle");
+      expect(m.text).toContain("https://lostandfound.eisenhower.school/staff");
+      // The claimant's name, contact and message stay behind the session.
+      expect(`${m.subject} ${m.text} ${m.html}`).not.toMatch(/Pat|example\.com|Dent/);
+    }
+  });
+
+  it("mails nobody when no address is configured", async () => {
+    expect((await post(claim)).sent).toEqual([]);
+  });
+
+  it("answers identically — and stores and mails nothing — for a honeypot, a cap, or an unlisted item", async () => {
+    const notify = ["office@school.example"];
     for (const r of [
-      await post({ ...claim, website: "http://spam" }),
-      await post(claim, { total: 50 }),
-      await post(claim, { mine: 3 }),
-      await post(claim, { open: 10 }),
-      await post(claim, { item: row({ hidden_at: "2026-10-01T00:00:00Z" }) }),
-      await post(claim, { item: row({ status: "returned" }) }),
-      await post(claim, { item: row({ held_at: "2026-10-01T00:00:00Z" }) }),
-      await post(claim, { item: null }),
+      await post({ ...claim, website: "http://spam" }, { notify }),
+      await post(claim, { total: 50, notify }),
+      await post(claim, { mine: 3, notify }),
+      await post(claim, { open: 10, notify }),
+      await post(claim, { item: row({ hidden_at: "2026-10-01T00:00:00Z" }), notify }),
+      await post(claim, { item: row({ status: "returned" }), notify }),
+      await post(claim, { item: row({ held_at: "2026-10-01T00:00:00Z" }), notify }),
+      await post(claim, { item: null, notify }),
     ]) {
       expect(r.status).toBe(200);
       expect(r.json).toEqual({ ok: true });
       expect(r.writes).toEqual([]);
       expect(r.audit).toEqual([]);
+      expect(r.sent).toEqual([]);
     }
   });
 

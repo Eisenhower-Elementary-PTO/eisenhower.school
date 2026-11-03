@@ -401,6 +401,36 @@ export function newSubscriberDigestEmail(env: Env, subs: NewSubscriberSummary[])
   };
 }
 
+/**
+ * Somebody said "that's mine" on a lost & found item (invariant 33).
+ *
+ * Sent to the addresses a system admin configured on the lost & found settings
+ * screen. Deliberately thin, for `accessRequestEmail`'s reason: the item's
+ * TITLE is here because the item is public and the title is how staff recognise
+ * it, but the claimant's name, contact and message are NOT — those belong on
+ * the staff queue behind a session, not copied into several inboxes that
+ * outlive the claim's own retention (claims are swept; email isn't).
+ */
+export function lostFoundClaimEmail(env: Env, itemTitle: string): SendArgs {
+  const school = env.SCHOOL_NAME;
+  const queue = `${env.LOSTFOUND_URL ?? ""}/staff`;
+  const title = itemTitle.trim() || "an item";
+  return {
+    to: "",
+    subject: `Lost & found claim: ${title}`,
+    text: `Someone says "${title}" in the ${school} lost & found is theirs.
+
+Their name and how to reach them are on the claims queue:
+${queue}
+
+You're getting this because your address is on the lost & found's claim notifications. A system admin can change the list in Lost & found → Admin.`,
+    html: `<p>Someone says <strong>${esc(title)}</strong> in the <strong>${esc(school)}</strong> lost &amp; found is theirs.</p>
+<p>Their name and how to reach them are on the claims queue:</p>
+<p><a href="${queue}">Open the claims queue</a></p>
+<p style="color:#56636f;font-size:13px">You're getting this because your address is on the lost &amp; found's claim notifications. A system admin can change the list in Lost &amp; found → Admin.</p>`,
+  };
+}
+
 export function magicLinkEmail(env: Env, link: string): SendArgs {
   const school = env.SCHOOL_NAME;
   return {
