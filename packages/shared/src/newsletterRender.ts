@@ -168,6 +168,36 @@ export type NewsletterFontSize = keyof typeof NEWSLETTER_FONT_SIZES;
 export function isNewsletterFontSize(v: unknown): v is NewsletterFontSize {
   return typeof v === "string" && Object.prototype.hasOwnProperty.call(NEWSLETTER_FONT_SIZES, v);
 }
+
+/** Where a block appears. Absent means everywhere — the email, the archive
+ *  page and the printed copy. `screen-only` keeps a block off PAPER while the
+ *  email and the page still carry it (a photo spread the two-page print can't
+ *  afford); `print-only` is the inverse, for a line that only makes sense on
+ *  paper ("scan the code for the photos"), and never reaches the email at all.
+ *  A NAME from a fixed list, not CSS, for NEWSLETTER_FONT_SIZES' reason: the
+ *  renderer writes every style itself (invariant 9). */
+export type NewsletterPrintVisibility = "screen-only" | "print-only";
+
+export function isNewsletterPrintVisibility(v: unknown): v is NewsletterPrintVisibility {
+  return v === "screen-only" || v === "print-only";
+}
+
+/** The node types that may carry `printVisibility`: the blocks an author
+ *  arranges a page with. Structural internals (listItem, table rows and
+ *  cells) are excluded — half a table hidden on paper is a broken table, and
+ *  the editor offers the control block-by-block to match. The composer's
+ *  extension reads this set, so the two cannot disagree. */
+export const PRINT_VISIBILITY_BLOCKS = new Set([
+  "paragraph",
+  "heading",
+  "bulletList",
+  "orderedList",
+  "blockquote",
+  "horizontalRule",
+  "image",
+  "table",
+  EVENTS_BLOCK_TYPE,
+]);
 const ALLOWED_BLOCKS = new Set([
   "doc",
   "paragraph",
@@ -290,6 +320,30 @@ function sanitizeNode(raw: unknown, path: string): NewsletterNode | NewsletterNo
   // philosophy as text.ts's htmlToText — rather than silently eating content.
   if (!ALLOWED_BLOCKS.has(type)) return children.length > 0 ? children : null;
 
+  const out = sanitizeBlock(type, node, children, path);
+  // Carried across every eligible block in ONE place rather than per case, so
+  // a block type added to the switch can't forget it. An invalid value — or
+  // one on a type the set excludes — is dropped, leaving the block everywhere.
+  // TOP-LEVEL blocks only (path "0.N": doc is "0" and each segment is one
+  // level down): the renderers honour the mark only where renderNode sees the
+  // whole block — a paragraph nested in a list item or table cell renders
+  // through unwrap shortcuts and the text renderer's inline(), so a kept mark
+  // there would show a badge in the editor while the content mailed and
+  // printed anyway. The editor's command already refuses nested targets; this
+  // is the same rule applied to a hand-crafted or pasted document.
+  if (out && !Array.isArray(out) && PRINT_VISIBILITY_BLOCKS.has(type) && /^\d+\.\d+$/.test(path)) {
+    const pv = (node.attrs as Record<string, unknown> | undefined)?.printVisibility;
+    if (isNewsletterPrintVisibility(pv)) out.attrs = { ...out.attrs, printVisibility: pv };
+  }
+  return out;
+}
+
+function sanitizeBlock(
+  type: string,
+  node: Record<string, unknown>,
+  children: NewsletterNode[],
+  path: string,
+): NewsletterNode | NewsletterNode[] | null {
   switch (type) {
     case "heading": {
       const raw = (node.attrs as { level?: unknown } | undefined)?.level;
@@ -1021,7 +1075,35 @@ function seeAllLink(ctx: Ctx): string {
   return `<p${attr(ctx, "nl-events-more", `margin:-12px 0 20px;font-size:13.5px;font-family:${FONT}`)}><a href="${escapeHtml(href)}"${attr(ctx, "nl-events-more-link", `color:${ctx.accent};text-decoration:none;font-weight:600`)}>See all events →</a></p>`;
 }
 
+/** The visibility a stored block carries, re-checked against the fixed list
+ *  and the eligible types rather than trusted from the sanitizer — the
+ *  renderer is the allowlist of record (invariant 9). */
+function printVisibilityOf(node: NewsletterNode): NewsletterPrintVisibility | null {
+  if (!PRINT_VISIBILITY_BLOCKS.has(node.type)) return null;
+  const v = (node.attrs as Record<string, unknown> | undefined)?.printVisibility;
+  return isNewsletterPrintVisibility(v) ? v : null;
+}
+
 function renderNode(node: NewsletterNode, ctx: Ctx): string {
+  const pv = printVisibilityOf(node);
+  if (!pv) return renderVisibleNode(node, ctx);
+  // The email is a screen, so a screen-only block mails as it always did; a
+  // print-only block never reaches an inbox at all — an email client honours
+  // no @media print, so there is no way to mail one "hidden".
+  if (ctx.mode === "email") {
+    return pv === "print-only" ? "" : renderVisibleNode(node, ctx);
+  }
+  // A screen-only block never prints, so its links draw no margin QR codes
+  // (renderTable's reasoning): a code minted here would claim a number that
+  // nothing on paper shows, and a later repeat of the link would superscript
+  // a reference to it.
+  const inner: Ctx = pv === "screen-only" ? { ...ctx, linkQrs: null, qrSink: null } : ctx;
+  const html = renderVisibleNode(node, inner);
+  if (!html) return "";
+  return `<div class="${pv === "print-only" ? "nl-print-only" : "nl-screen-only"}">${html}</div>`;
+}
+
+function renderVisibleNode(node: NewsletterNode, ctx: Ctx): string {
   switch (node.type) {
     case "doc":
       return renderChildren(node.content, ctx);
@@ -1253,6 +1335,10 @@ export function renderNewsletterText(
   };
 
   const block = (n: NewsletterNode, depth: number) => {
+    // The text part is the email's twin, and excerpts describe the page a
+    // reader will open: neither is paper, so a print-only block is left out,
+    // exactly as the email HTML leaves it out. Screen-only blocks stay.
+    if (printVisibilityOf(n) === "print-only") return;
     switch (n.type) {
       case "doc":
         for (const c of n.content ?? []) block(c, depth);
@@ -1724,6 +1810,15 @@ export const NEWSLETTER_PRINT_RULES = `
      smudges or empty boxes — so paper goes without them. The renderer wraps
      each one (hideEmojiOnPaper); on screen the span is inert. */
   .nl-emoji{display:none}
+  /* Author-chosen per-block visibility (renderNode). display:contents, not
+     block: the wrapper contributes no box, so the fragmentation rules above
+     (break-after on headings, break-inside on rows and images) keep binding
+     between the real elements — a block wrapper would orphan a print-only
+     heading at a page's foot. Because these rules are part of
+     NEWSLETTER_PRINT_RULES, the composer's page estimate excludes screen-only
+     blocks and counts print-only ones without knowing the feature exists. */
+  .nl-screen-only{display:none}
+  .nl-print-only{display:contents}
   .nl-title{font-size:26px}
   .nl-p,.nl-ul,.nl-ol{font-size:10.5pt;line-height:1.55}
   /* Don't strand a heading or an event row at the foot of a page. */
@@ -1806,6 +1901,13 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-fig-td{padding:0}
 .nl-fig-img{display:block;width:100%;height:auto;border-radius:8px}
 .nl-fig .nl-img-caption{margin:6px 0 0;font-size:13px}
+/* Per-block visibility wrappers (renderNode). display:contents so the wrapper
+   contributes no box on screen either — a marked image floats and a marked
+   heading spaces exactly as an unmarked one. A print-only block exists for
+   paper: on screen the none below wins, and NEWSLETTER_PRINT_RULES flips the
+   pair for ink. */
+.nl-screen-only,.nl-print-only{display:contents}
+.nl-print-only{display:none}
 .nl-table{width:100%;border-collapse:collapse;margin:0 0 16px}
 /* Authored column widths (the cells' width="NN%" attributes) only bind under
    fixed layout; the class applies on screen and in print alike. */

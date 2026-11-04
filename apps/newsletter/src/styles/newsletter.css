@@ -180,6 +180,35 @@
    toolbar's "Edit image" button now applies to it. */
 .nlx-editor .ProseMirror img.ProseMirror-selectednode { outline: 3px solid var(--blue); outline-offset: 2px; }
 
+/* Blocks the author scoped with the print-visibility picker (PrintVisibility
+   extension → data-print-visibility). A dashed edge plus a badge, because the
+   draft otherwise looks identical either way — that invisibility is the whole
+   feature, and also why it needs a loud marker here. The badge rides ::before,
+   which an <img> can't carry; a marked image still gets the dashed edge, and
+   the toolbar picker names its state while it's selected. */
+.nlx-editor .ProseMirror [data-print-visibility] {
+  outline: 1px dashed var(--line-2, var(--line));
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+.nlx-editor .ProseMirror [data-print-visibility]::before {
+  display: block;
+  width: fit-content;
+  margin: 0 0 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.6;
+}
+.nlx-editor .ProseMirror [data-print-visibility="screen-only"]::before { content: "Not printed"; }
+.nlx-editor .ProseMirror [data-print-visibility="print-only"]::before { content: "Print only"; }
+
 /* ── Image editor (ImageEditor.tsx) ─────────────────────────────────────── */
 
 .nlx-imged-stage {

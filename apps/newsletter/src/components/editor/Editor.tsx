@@ -32,10 +32,16 @@ import {
   normalizeTableWidths,
 } from "./tableWidths.js";
 import { NodeSelection } from "@tiptap/pm/state";
-import { isNewsletterFontSize, type NewsletterFontSize, type NewsletterNode } from "@sd/shared";
+import {
+  isNewsletterFontSize,
+  isNewsletterPrintVisibility,
+  type NewsletterFontSize,
+  type NewsletterNode,
+} from "@sd/shared";
 import { Icon, type IconName } from "../Icon.js";
 import { EventsBlock } from "./EventsBlock.js";
 import { FontSize } from "./FontSize.js";
+import { PrintVisibility } from "./PrintVisibility.js";
 import { ImageEditor } from "./ImageEditor.js";
 import { api, errorMessage } from "../../lib/api.js";
 
@@ -49,6 +55,15 @@ const SIZE_OPTIONS: { value: NewsletterFontSize | ""; label: string }[] = [
   { value: "", label: "Normal" },
   { value: "large", label: "Large" },
 ];
+
+/** Where the selected block appears. "" is everywhere — no attribute. The
+ *  wording leads with what a reader LOSES ("not printed"), because the author
+ *  is looking at a screen where nothing visibly changes either way. */
+const PRINT_OPTIONS = [
+  { value: "", label: "Print + web" },
+  { value: "screen-only", label: "Not printed" },
+  { value: "print-only", label: "Print only" },
+] as const;
 
 /** An uploaded image's type from its URL. /newsletter/media names every object
  *  `<ulid>.<ext>`, so the extension is reliable for anything that came from there. */
@@ -118,6 +133,19 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
           caption: imageCaptionOf(sel.node.attrs.caption),
         }
       : null;
+
+  // Every top-level block the selection touches, because setPrintVisibility
+  // applies to all of them: a selection whose blocks disagree shows "Mixed"
+  // rather than the first block's state — a picker reading "Print + web"
+  // over a half-hidden selection would say nothing needs changing.
+  const pvStates = new Set<string>();
+  editor.state.doc.nodesBetween(sel.from, sel.to, (node, _pos, parent) => {
+    if (parent?.type.name !== "doc") return true;
+    const v = node.attrs.printVisibility;
+    pvStates.add(isNewsletterPrintVisibility(v) ? v : "");
+    return false;
+  });
+  const pvValue = pvStates.size > 1 ? "mixed" : [...pvStates][0] ?? "";
   const canEditSelected = !!selectedImage?.src && typeOfUrl(selectedImage.src) !== "image/gif";
 
   /** Upload the edited pixels, then put them where they belong. An edit of an
@@ -212,6 +240,30 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
         } />
       <ToolButton icon="calendar" label="Upcoming events"
         onClick={() => editor.chain().focus().insertEventsBlock().run()} />
+      <span className="nlx-tool-sep" />
+      <select
+        className="nlx-size"
+        title="Where this block appears (the printed copy has a two-page budget; its QR code links readers to everything web-only)"
+        aria-label="Print visibility"
+        value={pvValue}
+        onChange={(e) => {
+          const v = e.target.value;
+          editor
+            .chain()
+            .focus()
+            .setPrintVisibility(isNewsletterPrintVisibility(v) ? v : null)
+            .run();
+        }}
+      >
+        {pvValue === "mixed" && (
+          <option value="mixed" disabled>
+            Mixed
+          </option>
+        )}
+        {PRINT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
       {editor.isActive("table") && (
         <>
           <span className="nlx-tool-sep" />
@@ -296,6 +348,7 @@ export function Editor({
         PctTableHeader,
         PctTableCell,
         Placeholder.configure({ placeholder: "Write the newsletter…" }),
+        PrintVisibility,
         EventsBlock.configure({ accentColor, timeZone, calendarUrl }),
       ],
       content,

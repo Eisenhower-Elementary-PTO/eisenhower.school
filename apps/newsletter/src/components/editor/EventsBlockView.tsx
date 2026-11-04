@@ -92,7 +92,15 @@ export function EventsBlockView({
         : `${calendarIds.length} calendars`;
 
   return (
-    <NodeViewWrapper>
+    // The print-visibility attribute is restated by hand: a React node view
+    // renders its own DOM, so addGlobalAttributes' renderHTML (which puts
+    // data-print-visibility on ordinary blocks for the editor's badge styles)
+    // never reaches this wrapper on its own.
+    <NodeViewWrapper
+      data-print-visibility={
+        typeof node.attrs.printVisibility === "string" ? node.attrs.printVisibility : undefined
+      }
+    >
       <div className={`nlx-block${selected ? " sel" : ""}`} contentEditable={false}>
         <div className="nlx-block-bar">
           <Icon name="calendar" size={15} stroke={2} />

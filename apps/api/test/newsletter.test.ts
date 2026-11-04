@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   EVENTS_BLOCK_TYPE,
+  NEWSLETTER_PRINT_RULES,
   NEWSLETTER_WEB_CSS,
   NO_EVENTS,
   eventKey,
@@ -1265,5 +1266,143 @@ describe("parseSubscriberList", () => {
     expect(parseSubscriberList("").valid).toEqual([]);
     expect(parseSubscriberList("Jane Doe\nBob Roe").valid).toEqual([]);
     expect(parseSubscriberList("Jane Doe\nBob Roe").invalid).toEqual([]);
+  });
+});
+
+// Per-block print visibility (printVisibility attr → .nl-screen-only /
+// .nl-print-only). The contract has three legs: the sanitizer keeps only the
+// two named values on eligible blocks, the renderer scopes each surface
+// (email = screen, paper = print), and the shared stylesheets do the hiding —
+// which is also what keeps the composer's page estimate honest, since it
+// measures with NEWSLETTER_PRINT_RULES applied.
+describe("newsletter print visibility", () => {
+  const marked = (printVisibility: unknown, text = "scoped"): NewsletterNode => ({
+    type: "paragraph",
+    attrs: { printVisibility },
+    content: [{ type: "text", text }],
+  });
+
+  it("keeps the two named values and drops anything else", () => {
+    const ok = sanitizeNewsletterDoc(doc(marked("screen-only"), marked("print-only")))!;
+    expect(ok.content![0]!.attrs).toEqual({ printVisibility: "screen-only" });
+    expect(ok.content![1]!.attrs).toEqual({ printVisibility: "print-only" });
+    for (const bad of ["both", "SCREEN-ONLY", "", 1, null, { v: "print-only" }]) {
+      const out = sanitizeNewsletterDoc(doc(marked(bad)))!;
+      expect(JSON.stringify(out)).not.toContain("printVisibility");
+    }
+  });
+
+  it("drops the attribute from a block type the set excludes", () => {
+    const out = sanitizeNewsletterDoc(
+      doc({
+        type: "bulletList",
+        content: [
+          {
+            type: "listItem",
+            attrs: { printVisibility: "screen-only" },
+            content: [para("item")],
+          },
+        ],
+      }),
+    )!;
+    expect(JSON.stringify(out)).not.toContain("printVisibility");
+  });
+
+  it("drops the attribute from an eligible type that isn't a top-level block", () => {
+    // A pasted document can carry the mark on a paragraph inside a list item
+    // or table cell; the renderers only honour it where renderNode sees the
+    // whole block, so the sanitizer keeps it at the top level alone — else
+    // the editor would show a badge over content that mails and prints anyway.
+    const nested = sanitizeNewsletterDoc(
+      doc({
+        type: "bulletList",
+        content: [
+          {
+            type: "listItem",
+            content: [
+              {
+                type: "paragraph",
+                attrs: { printVisibility: "print-only" },
+                content: [{ type: "text", text: "item" }],
+              },
+            ],
+          },
+        ],
+      }),
+    )!;
+    expect(JSON.stringify(nested)).not.toContain("printVisibility");
+  });
+
+  it("keeps a print-only block out of the email's HTML and text, and mails a screen-only one", () => {
+    const d = doc(para("always"), marked("print-only", "paper note"), marked("screen-only", "web extra"));
+    const html = renderNewsletterBodyHtml(d, NO_EVENTS, { mode: "email" });
+    expect(html).toContain("always");
+    expect(html).not.toContain("paper note");
+    // Mailed exactly as an unmarked paragraph — no wrapper, no class (email
+    // emits no classes at all).
+    expect(html).toContain("web extra");
+    expect(html).not.toContain("nl-screen-only");
+    const text = renderNewsletterText(d, NO_EVENTS);
+    expect(text).toContain("always");
+    expect(text).toContain("web extra");
+    expect(text).not.toContain("paper note");
+  });
+
+  it("wraps marked blocks on the web page and leaves the rest untouched", () => {
+    const html = renderNewsletterBodyHtml(
+      doc(para("always"), marked("screen-only"), marked("print-only", "paper note")),
+      NO_EVENTS,
+      { mode: "web" },
+    );
+    expect(html).toContain('<div class="nl-screen-only"><p class="nl-p">scoped</p></div>');
+    expect(html).toContain('<div class="nl-print-only"><p class="nl-p">paper note</p></div>');
+    expect(html).toContain('<p class="nl-p">always</p>');
+  });
+
+  it("ignores the attribute on a node type outside the eligible set", () => {
+    // Unsanitized on purpose: the renderer is the allowlist of record.
+    const html = renderNewsletterBodyHtml(
+      doc({
+        type: "bulletList",
+        content: [
+          { type: "listItem", attrs: { printVisibility: "print-only" }, content: [para("item")] },
+        ],
+      }),
+      NO_EVENTS,
+      { mode: "email" },
+    );
+    expect(html).toContain("item");
+  });
+
+  it("draws no margin QR code for a link inside a screen-only block", () => {
+    const linked = (pv: string | null): NewsletterNode => ({
+      type: "paragraph",
+      attrs: pv ? { printVisibility: pv } : undefined,
+      content: [
+        {
+          type: "text",
+          text: "sign up",
+          marks: [{ type: "link", attrs: { href: "https://x.test/signup" } }],
+        },
+      ],
+    });
+    const hidden = renderNewsletterBodyHtml(doc(linked("screen-only")), NO_EVENTS, { mode: "web" });
+    // The block never prints, so no code may claim a number in the margin rail.
+    expect(hidden).not.toContain("nl-qr-col");
+    const printed = renderNewsletterBodyHtml(doc(linked(null)), NO_EVENTS, { mode: "web" });
+    expect(printed).toContain("nl-qr-col");
+  });
+
+  it("hides each wrapper on its wrong surface in the shared stylesheets", () => {
+    // On both surfaces the visible wrapper is display:contents — no box, so
+    // the print fragmentation rules (break-after on headings and friends)
+    // still bind between the real sibling elements.
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-screen-only,.nl-print-only{display:contents}");
+    // Screen: print-only content stays off the page.
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-print-only{display:none}");
+    // Paper (and the composer's page estimator, which applies these same
+    // rules): screen-only content drops out, print-only content appears.
+    expect(NEWSLETTER_PRINT_RULES).toContain(".nl-screen-only{display:none}");
+    expect(NEWSLETTER_PRINT_RULES).toContain(".nl-print-only{display:contents}");
   });
 });
