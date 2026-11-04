@@ -48,7 +48,6 @@ const SIZE_OPTIONS: { value: NewsletterFontSize | ""; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "", label: "Normal" },
   { value: "large", label: "Large" },
-  { value: "xlarge", label: "Huge" },
 ];
 
 /** An uploaded image's type from its URL. /newsletter/media names every object

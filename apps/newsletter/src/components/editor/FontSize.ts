@@ -1,7 +1,7 @@
 // Text size as a mark whose only attribute is a NAME from a fixed list.
 //
 // TipTap's TextStyle + FontSize pair would store an arbitrary CSS value
-// ("17.3px", "clamp(…)") on the node; this stores "small" | "large" | "xlarge",
+// ("17.3px", "clamp(…)") on the node; this stores "small" | "large",
 // which newsletterRender.ts turns into a style it writes itself (invariant 9).
 // The list is NEWSLETTER_FONT_SIZES in @sd/shared, so the picker can't offer a
 // size the renderer would drop. "Normal" is no mark at all.
