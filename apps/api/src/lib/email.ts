@@ -499,11 +499,17 @@ export function volunteerReminderEmail(
   const link = args.sheetUrl ? `\n\nEvent details and your sign-up:\n${args.sheetUrl}` : "";
   return {
     to: "",
+    // Replies go to a human mailbox when one is configured — the From identity
+    // lives on the sending subdomain, which nobody reads.
+    ...(env.EMAIL_REPLY_TO ? { replyTo: env.EMAIL_REPLY_TO } : {}),
     subject: `Reminder: volunteering at ${args.eventTitle} — ${args.when}`,
-    text: `${testNote}Your family signed up to volunteer at ${args.eventTitle}.\n\nWhen: ${args.when}${where}\n\nYour ${one ? "shift" : "shifts"}:\n${lines.join("\n")}${runbook}${link}\n\nThank you for helping out — ${school}.`,
-    html: `${testBanner}<p>Your family signed up to volunteer at <strong>${esc(args.eventTitle)}</strong>.</p>
+    // "Someone in your family", not "your family": one email reaches the whole
+    // household's address, and "your family signed up" read as if ALL of them
+    // had (user feedback, 2026-11-03). The shift list below is the specifics.
+    text: `${testNote}Someone in your family is signed up to volunteer at ${args.eventTitle}.\n\nWhen: ${args.when}${where}\n\nYour family's ${one ? "shift" : "shifts"}:\n${lines.join("\n")}${runbook}${link}\n\nThank you for helping out — ${school}.`,
+    html: `${testBanner}<p>Someone in your family is signed up to volunteer at <strong>${esc(args.eventTitle)}</strong>.</p>
 <p>When: <strong>${esc(args.when)}</strong>${args.location ? `<br>Where: ${esc(args.location)}` : ""}</p>
-<p>Your ${one ? "shift" : "shifts"}:</p>
+<p>Your family's ${one ? "shift" : "shifts"}:</p>
 <ul>${rows}</ul>
 ${args.runbookUrl ? `<p><a href="${args.runbookUrl}">How this event is run</a> — the volunteer runbook.</p>\n` : ""}${args.sheetUrl ? `<p><a href="${args.sheetUrl}">Event details and your sign-up</a></p>\n` : ""}<p style="color:#56636f;font-size:13px">Thank you for helping out — ${esc(school)}.</p>`,
   };

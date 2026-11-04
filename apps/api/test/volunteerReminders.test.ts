@@ -112,6 +112,7 @@ interface SentMessage {
   subject: string;
   text: string;
   html: string;
+  replyTo?: string;
 }
 
 function fakeEnv(world: World): { env: Env; sent: SentMessage[]; refuse: { on: boolean } } {
@@ -261,6 +262,8 @@ function fakeEnv(world: World): { env: Env; sent: SentMessage[]; refuse: { on: b
     // retry sleeps on the failure test.
     BULK_EMAIL_FROM: "Eisenhower PTO <newsletter@sitemail.example>",
     EMAIL_FROM: "Directory <directory@sitemail.example>",
+    // Replies go to a human, not the sending machine (absent-means-off).
+    EMAIL_REPLY_TO: "site@eisenhower.example",
     EMAIL: {
       async send(msg: SentMessage) {
         if (refuse.on) {
@@ -268,7 +271,7 @@ function fakeEnv(world: World): { env: Env; sent: SentMessage[]; refuse: { on: b
           err.code = "E_SEND_FAILED";
           throw err;
         }
-        sent.push({ to: msg.to, subject: msg.subject, text: msg.text, html: msg.html });
+        sent.push({ to: msg.to, subject: msg.subject, text: msg.text, html: msg.html, replyTo: msg.replyTo });
       },
     },
   } as unknown as Env;
@@ -404,6 +407,15 @@ describe("sendVolunteerReminders", () => {
     // And it is a REAL reminder: no test banner, nothing claiming it lists the
     // whole sheet (that wording is the proof's alone — see buildTestReminder).
     expect(dana.text).not.toMatch(/test|every position/i);
+
+    // It speaks of SOMEONE in the family, never "your family signed up" — one
+    // address covers the household, and the plural reading said all of them
+    // had signed up (user feedback, 2026-11-03).
+    expect(dana.text).toContain("Someone in your family");
+    expect(dana.text).not.toContain("Your family signed up");
+
+    // Replies land with a human (EMAIL_REPLY_TO), not the sending machine.
+    expect(dana.replyTo).toBe("site@eisenhower.example");
 
     // The record: one audit row, counts only, never an address.
     expect(w.audit).toHaveLength(1);

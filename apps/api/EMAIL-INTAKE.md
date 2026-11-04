@@ -65,31 +65,41 @@ before the move and serves sitemail now):
    # value: {"admin":["meandmybadself@gmail.com"],"pto":["…","…"]}
    ```
 
-## Apex cutover to Google Workspace (the remaining by-hand steps)
+## Apex cutover to Google Workspace — DONE 2026-11-03
 
-Until the cutover, the OLD apex rules (`found@`, `admin@`, `pto@` → same
-Worker) keep working alongside sitemail. Cutover day, in order:
+The split is now: **`sitemail` is the app's machine channel** (Email Sending
+outbound; Email Routing inbound for `found@sitemail`), **the apex is Google
+Workspace** for every human address, both directions. What was executed, for
+the record (and for anyone who has to re-run it elsewhere):
 
-1. Create the Google Workspace org on `eisenhower.school`; re-home the human
-   aliases there (`admin@`, `pto@` as Google Groups — that replaces the
-   Worker's fan-out for apex addresses).
-2. Delete the three apex routing rules, then disable Email Routing **for the
-   apex only** (dashboard — Settings → the apex domain row; leave the
-   `sitemail` subdomain registered). This frees the apex MX records.
-3. Retire the apex's Email Sending onboarding (`wrangler email sending
-   disable eisenhower.school`) once `BULK_EMAIL_FROM` no longer names it —
-   it hasn't since 2026-10-25.
-4. Set the apex DNS Google's way: MX → `smtp.google.com` (1), SPF TXT
-   `v=spf1 include:_spf.google.com ~all` (replacing the Cloudflare include),
-   Google's DKIM via Admin console. Mind `_dmarc.eisenhower.school` — it is
-   `p=reject` today; don't put Google in front of it until Google's DKIM is
-   signing.
-5. Tell the lost & found staff the intake address is
-   **found@sitemail.eisenhower.school** (mail to the old `found@` will
-   land in Google's world and bounce or sit unread).
+1. Google Workspace org on `eisenhower.school` created/verified by hand, with
+   `site@` (the app's Reply-To — `EMAIL_REPLY_TO` in wrangler.toml), and
+   `admin@`/`pto@` re-homed there (replacing the Worker's apex fan-out).
+2. The three apex routing rules (`found@`, `admin@`, `pto@`) deleted via the
+   API ($CF_TOKEN has Rules Edit), then `POST /zones/:id/email/routing/disable`
+   (wrangler's OAuth token — $CF_TOKEN lacks the settings scope, and the
+   routing-managed MX records refuse direct DNS deletes with code 1046).
+   **The zone-level disable removed only the APEX's routing DNS**: the
+   `sitemail` subdomain registration, its MX records and the `found@sitemail`
+   rule all survived, verified immediately after.
+3. Apex Email Sending retired (`wrangler email sending disable
+   eisenhower.school --force`); `sitemail` stays the one onboarded sender.
+   **`cf2024-1._domainkey.eisenhower.school` was deliberately LEFT in place** —
+   Email Sending may sign sitemail's mail with that zone-level selector (no
+   `cf2024-1._domainkey.sitemail…` record exists), so deleting it risks the
+   newsletter channel's DKIM for the price of one tidy TXT.
+4. Apex DNS set Google's way: `MX 1 smtp.google.com`, SPF TXT
+   `v=spf1 include:_spf.google.com ~all` (both propagated and verified via
+   8.8.8.8). Google's DKIM (`google._domainkey` TXT from Admin console →
+   Authenticate email) still to be added — do it promptly:
+   `_dmarc.eisenhower.school` is `p=reject`, and while Google's own sending
+   passes DMARC via aligned SPF, DKIM is what survives forwarding.
+5. Lost & found staff must be told the intake address is
+   **found@sitemail.eisenhower.school** (mail to the old apex `found@` now
+   lands in Google's world and bounces or sits unread).
 
-Nothing in the app changes on cutover day — every address it uses already
-lives on `sitemail` or a third party.
+Nothing in the app changed on cutover day — every address it uses already
+lived on `sitemail` or a third party.
 
 ## Adding the PTO board to the pto alias
 

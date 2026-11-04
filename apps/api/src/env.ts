@@ -52,6 +52,14 @@ export interface Env {
   /** Public origin of the lost & found. Like PTO_URL, nothing the API sends
    *  points at it yet; it lives here beside its siblings. */
   LOSTFOUND_URL?: string;
+  /** Reply-To for member-facing app mail that invites an answer (today: the
+   *  volunteer reminder). A HUMAN mailbox — site@eisenhower.school, in the
+   *  school's Google Workspace — where the From identities live on `sitemail`,
+   *  which no one reads. Absent-means-off like the rest of the email config:
+   *  unset, the message carries no Reply-To and replies go to the From
+   *  address. Only useful once the apex MX points at Google and the mailbox
+   *  exists there (EMAIL-INTAKE.md's cutover). */
+  EMAIL_REPLY_TO?: string;
   /** The school's IANA zone. Everything server-side reads timed events in it
    *  (email, public archive, Slack, unzoned feed times). Always read through
    *  `resolveTimeZone`, which falls back to America/Chicago. */

@@ -224,6 +224,12 @@ BOOTSTRAP_ADMIN_EMAILS = "meandmybadself@gmail.com"
 # by test send 2026-10-25 (the apex's own onboarding, 2026-10-22, is retired
 # with the apex MX handoff to Google Workspace — EMAIL-INTAKE.md).
 BULK_EMAIL_FROM = "Eisenhower PTO <newsletter@sitemail.eisenhower.school>"
+# Where a member's reply to app mail lands (today: the volunteer reminder) — a
+# HUMAN mailbox in the school's Google Workspace, where the sitemail From
+# identities are machines nobody reads. Absent-means-off (dev/vitest carry no
+# Reply-To). Useful only once the apex MX points at Google and site@ exists
+# there — see apps/api/EMAIL-INTAKE.md's cutover section.
+EMAIL_REPLY_TO = "site@eisenhower.school"
 
 [[env.production.d1_databases]]
 binding = "DB"
