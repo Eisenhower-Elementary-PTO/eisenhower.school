@@ -469,10 +469,24 @@ export function volunteerReminderEmail(
     /** The sheet's admin-entered runbook link, if any (held to http(s) on
      *  write by `normalizeRunbookUrl`, so it is safe as an anchor). */
     runbookUrl: string | null;
+    /** The admin's proof (`buildTestReminder`). A test renders EVERY position
+     *  where a real reminder carries only the recipient's own shifts, and the
+     *  body opens with "Your family signed up…" — so without a banner saying
+     *  so, the proof reads as a reminder for shifts the reader never claimed
+     *  (it did, the first evening it was tried). The banner is in the BODY,
+     *  not just the subject: a "[Test]" prefix explains that the send is a
+     *  rehearsal, not that the shift list is the whole sheet. */
+    isTest?: boolean;
   },
 ): SendArgs {
   const school = env.SCHOOL_NAME;
   const one = args.shifts.length === 1;
+  const testNote = args.isTest
+    ? "This is a test of the automated volunteer reminder. It lists EVERY position on the sheet — a real reminder shows each family only the shifts they signed up for, two evenings before the event.\n\n"
+    : "";
+  const testBanner = args.isTest
+    ? `<p style="background:#fff7e6;border:1px solid #f0d9a8;border-radius:6px;padding:10px 12px;color:#6b5618;font-size:13px">This is a <strong>test</strong> of the automated volunteer reminder. It lists <strong>every position on the sheet</strong> — a real reminder shows each family only the shifts they signed up for, two evenings before the event.</p>\n`
+    : "";
   const lines = args.shifts.map((s) => `• ${s.title}${s.window ? ` — ${s.window}` : ""}`);
   const rows = args.shifts
     .map(
@@ -486,8 +500,8 @@ export function volunteerReminderEmail(
   return {
     to: "",
     subject: `Reminder: volunteering at ${args.eventTitle} — ${args.when}`,
-    text: `Your family signed up to volunteer at ${args.eventTitle}.\n\nWhen: ${args.when}${where}\n\nYour ${one ? "shift" : "shifts"}:\n${lines.join("\n")}${runbook}${link}\n\nThank you for helping out — ${school}.`,
-    html: `<p>Your family signed up to volunteer at <strong>${esc(args.eventTitle)}</strong>.</p>
+    text: `${testNote}Your family signed up to volunteer at ${args.eventTitle}.\n\nWhen: ${args.when}${where}\n\nYour ${one ? "shift" : "shifts"}:\n${lines.join("\n")}${runbook}${link}\n\nThank you for helping out — ${school}.`,
+    html: `${testBanner}<p>Your family signed up to volunteer at <strong>${esc(args.eventTitle)}</strong>.</p>
 <p>When: <strong>${esc(args.when)}</strong>${args.location ? `<br>Where: ${esc(args.location)}` : ""}</p>
 <p>Your ${one ? "shift" : "shifts"}:</p>
 <ul>${rows}</ul>

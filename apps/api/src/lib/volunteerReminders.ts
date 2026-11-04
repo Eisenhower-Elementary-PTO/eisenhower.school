@@ -384,6 +384,10 @@ export async function buildTestReminder(
     shifts: positions.results.map((p) => reminderShift(event, p, timeZone)),
     sheetUrl: sheetUrlOf(env, row.slug),
     runbookUrl: row.runbook_url,
+    // The banner that says "this lists EVERY position". Without it the proof
+    // reads as a reminder for shifts the reader never claimed — reported the
+    // first evening this feature was tried (2026-11-03).
+    isTest: true,
   });
   return { msg, positionCount: positions.results.length };
 }

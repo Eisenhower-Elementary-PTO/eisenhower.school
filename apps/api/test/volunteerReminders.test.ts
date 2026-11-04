@@ -401,6 +401,10 @@ describe("sendVolunteerReminders", () => {
     // The email names nobody — no first name from any fixture leaks in.
     expect(dana.text).not.toMatch(/Dana|Sam|01KID/i);
 
+    // And it is a REAL reminder: no test banner, nothing claiming it lists the
+    // whole sheet (that wording is the proof's alone — see buildTestReminder).
+    expect(dana.text).not.toMatch(/test|every position/i);
+
     // The record: one audit row, counts only, never an address.
     expect(w.audit).toHaveLength(1);
     const row = auditRow(w);
@@ -539,6 +543,13 @@ describe("buildTestReminder (the admin's proof)", () => {
     expect(msg.text).toContain("https://calendar.example/v/fall-carnival-2026-11-04");
     // Built with `to` unset — the ROUTE chooses recipients and adds "[Test]".
     expect(msg.to).toBe("");
+    // The banner that keeps the proof honest: it lists EVERY position, where a
+    // real reminder is per-family, and the body has to say so — an admin who
+    // signed up for one shift otherwise reads the whole sheet as THEIR shifts
+    // (reported the first evening this was tried, 2026-11-03).
+    expect(msg.text).toContain("EVERY position");
+    expect(msg.text).toContain("only the shifts they signed up for");
+    expect(msg.html).toContain("every position on the sheet");
   });
 
   it("reports an empty sheet so the route can refuse instead of mailing a blank", async () => {

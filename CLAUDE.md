@@ -368,7 +368,10 @@ Worker, sharing one session:
    (`buildTestReminder` — same renderer, built from POSITIONS so a draft with
    no signups can be proofed; subject prefixed `[Test]`; mails the admin's own
    address or up to 10 they typed, never the volunteers; audited
-   `volunteer.reminder.test_sent`, Slack-silent). The button lives on the
+   `volunteer.reminder.test_sent`, Slack-silent). The proof's BODY carries a
+   banner saying it lists every position where a real reminder is per-family —
+   without it the proof reads as a reminder for shifts the reader never
+   claimed (reported the first evening it was tried, 2026-11-03). The button lives on the
    calendar's sheet admin screen. `test/volunteerReminders.test.ts`.
 
 14. **Public newsletter sign-up is double opt-in; `POST
