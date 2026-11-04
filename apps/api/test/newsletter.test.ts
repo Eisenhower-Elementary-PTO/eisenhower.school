@@ -175,6 +175,24 @@ describe("newsletter sanitizer", () => {
     }
   });
 
+  it("keeps an image float and drops anything else", () => {
+    const img = (float: unknown) =>
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", float } });
+    expect(sanitizeNewsletterDoc(img("left"))!.content![0]!.attrs).toEqual({
+      src: "https://cdn.test/a.png",
+      alt: "",
+      float: "left",
+    });
+    expect(sanitizeNewsletterDoc(img("right"))!.content![0]!.attrs).toMatchObject({ float: "right" });
+    // Anything else leaves the image the full-width block it has always been.
+    for (const bad of ["center", "LEFT", true, 1, null]) {
+      expect(sanitizeNewsletterDoc(img(bad))!.content![0]!.attrs).toEqual({
+        src: "https://cdn.test/a.png",
+        alt: "",
+      });
+    }
+  });
+
   it("keeps a known text size and drops anything else, keeping the text", () => {
     const sized = (attrs: Record<string, unknown>) =>
       doc({ type: "paragraph", content: [{ type: "text", text: "big news", marks: [{ type: "fontSize", attrs }] }] });
@@ -297,6 +315,57 @@ describe("newsletter renderer", () => {
     expect(email).not.toContain('width="500%"');
     expect(email).not.toContain('width="60%"');
     expect(email).not.toContain("table-layout:fixed");
+  });
+
+  it("floats an image for email, web and print alike, text wrapping beside it", () => {
+    const img: NewsletterNode = {
+      type: "image",
+      attrs: { src: "https://cdn.test/a.png", alt: "Kids", float: "left" },
+    };
+    const email = renderNewsletterBodyHtml(doc(img, para("wraps")), NO_EVENTS, { mode: "email" });
+    // Outlook's Word engine floats on align/hspace and the pixel width
+    // attribute; CSS clients float on the style, whose percentage cap wins.
+    expect(email).toContain('align="left"');
+    expect(email).toContain('width="288"');
+    expect(email).toContain("float:left");
+    expect(email).toContain("max-width:48%");
+
+    const web = renderNewsletterBodyHtml(doc(img, para("wraps")), NO_EVENTS, { mode: "web" });
+    expect(web).toContain('class="nl-img nl-img-left"');
+    // One stylesheet serves screen and print, so the classes existing there is
+    // what carries the wrap to paper.
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-img-left{float:left");
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-img-right{float:right");
+
+    const right = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", float: "right" } }),
+      NO_EVENTS,
+      { mode: "email" },
+    );
+    expect(right).toContain('align="right"');
+    expect(right).toContain("float:right");
+
+    // An unfloated image renders exactly as it always has.
+    const plain = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png" } }),
+      NO_EVENTS,
+      { mode: "web" },
+    );
+    expect(plain).toContain('class="nl-img"');
+    expect(plain).not.toContain("nl-img-left");
+    expect(plain).not.toContain("align=");
+  });
+
+  it("re-checks the float at render, so an unsanitized value is never emitted", () => {
+    const html = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", float: 'left" onload="x' } }),
+      NO_EVENTS,
+      { mode: "email" },
+    );
+    expect(html).not.toContain("onload");
+    expect(html).not.toContain("align=");
+    // The image itself survives, as the ordinary full-width block.
+    expect(html).toContain("https://cdn.test/a.png");
   });
 
   it("never emits table markup for a row or cell outside a table", () => {

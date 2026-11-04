@@ -114,6 +114,10 @@
   margin: 22px 0;
 }
 .nlx-editor .ProseMirror img { max-width: 100%; height: auto; border-radius: 8px; }
+/* Floated images carry their geometry inline (imageFloat.ts), mirroring the
+   rendered issue; this only keeps a trailing float from spilling out of the
+   editing surface. */
+.nlx-editor .ProseMirror::after { content: ""; display: block; clear: both; }
 /* Tables, mirroring the renderer's .nl-table look so the draft reads like the
    issue — except the cell borders, which the render deliberately omits (email,
    archive and print alike): here they're dashed editing guides, since an

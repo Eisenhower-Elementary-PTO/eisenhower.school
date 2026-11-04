@@ -208,6 +208,21 @@ function cellWidthPct(raw: unknown): number | null {
   return pct >= 1 && pct <= 100 ? pct : null;
 }
 
+/** An image's float, or nothing (the full-width block every image has always
+ *  been). Two values and no free text, the fontSize precedent: the value lands
+ *  in an attribute and a style, so nothing an editor didn't write may pass.
+ *  Checked on write AND re-checked at render. */
+function imageFloat(raw: unknown): "left" | "right" | null {
+  return raw === "left" || raw === "right" ? raw : null;
+}
+
+/** A floated image's share of the measure. Roughly half, so the wrapped text
+ *  keeps a readable column beside it; the email restates it as a pixel width
+ *  attribute (48% of the 600px measure) because Outlook's Word engine ignores
+ *  max-width and would otherwise let a full-resolution photo swallow the line. */
+const IMAGE_FLOAT_MAX = "48%";
+const IMAGE_FLOAT_EMAIL_PX = 288;
+
 function sanitizeMarks(raw: unknown): NewsletterNode["marks"] {
   if (!Array.isArray(raw)) return undefined;
   const out: NonNullable<NewsletterNode["marks"]> = [];
@@ -277,7 +292,8 @@ function sanitizeNode(raw: unknown, path: string): NewsletterNode | NewsletterNo
       const src = safeImageSrc(attrs.src);
       if (!src) return null;
       const alt = typeof attrs.alt === "string" ? attrs.alt : "";
-      return { type, attrs: { src, alt } };
+      const float = imageFloat(attrs.float);
+      return { type, attrs: { src, alt, ...(float ? { float } : {}) } };
     }
     case EVENTS_BLOCK_TYPE: {
       const attrs = (node.attrs ?? {}) as Record<string, unknown>;
@@ -1032,10 +1048,25 @@ function renderNode(node: NewsletterNode, ctx: Ctx): string {
     case "hardBreak":
       return "<br />";
     case "image": {
-      const a = (node.attrs ?? {}) as { src?: string; alt?: string };
+      const a = (node.attrs ?? {}) as { src?: string; alt?: string; float?: unknown };
       const src = safeImageSrc(a.src);
       if (!src) return "";
-      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px")} />`;
+      const float = imageFloat(a.float);
+      if (!float) {
+        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px")} />`;
+      }
+      // A floated image needs BOTH forms, because the two email worlds split:
+      // Outlook's Word engine floats on the align attribute (and hspace/vspace
+      // for the gap) while ignoring float, max-width and margins; everything
+      // with CSS floats on the style, whose margins override the presentational
+      // hints. Pixel width attribute for Word again (it ignores max-width, and
+      // a full-resolution photo would otherwise take the whole measure); the
+      // style's percentage cap wins wherever CSS runs, so a narrow phone still
+      // gets a wrapped column. The web page's classes carry the same geometry
+      // in NEWSLETTER_WEB_CSS, print included.
+      const margin = float === "left" ? "4px 18px 10px 0" : "4px 0 10px 18px";
+      const style = `float:${float};width:${IMAGE_FLOAT_EMAIL_PX}px;max-width:${IMAGE_FLOAT_MAX};height:auto;border-radius:8px;margin:${margin}`;
+      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}" align="${float}" hspace="12" vspace="4" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, `nl-img nl-img-${float}`, style)} />`;
     }
     case "table":
       return renderTable(node, ctx);
@@ -1701,6 +1732,10 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-quote{margin:0 0 16px;padding:2px 0 2px 14px;border-left:3px solid var(--nl-accent,${DEFAULT_ACCENT});color:${MUTED};font-style:italic}
 .nl-hr{border:0;border-top:1px solid ${RULE};margin:26px 0}
 .nl-img{display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px}
+/* Floated images: text wraps beside them, on screen and on paper alike. The
+   geometry matches the email's inline form (renderNode's image case). */
+.nl-img-left{float:left;max-width:48%;margin:4px 18px 10px 0}
+.nl-img-right{float:right;max-width:48%;margin:4px 0 10px 18px}
 .nl-table{width:100%;border-collapse:collapse;margin:0 0 16px}
 /* Authored column widths (the cells' width="NN%" attributes) only bind under
    fixed layout; the class applies on screen and in print alike. */
@@ -1728,7 +1763,10 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-qr-col{display:none}
 .nl-qr-foot{display:none}
 .nl-qr-ref{display:none}
-.nl-foot{margin-top:22px;padding-top:18px;border-top:1px solid ${RULE};font-size:13px;line-height:1.6;color:${MUTED}}
+/* clear: a floated image as the issue's last block must not spill under the
+   footer rule. The email needs no twin — its body sits in its own table cell,
+   which contains floats on its own. */
+.nl-foot{clear:both;margin-top:22px;padding-top:18px;border-top:1px solid ${RULE};font-size:13px;line-height:1.6;color:${MUTED}}
 .nl-archive-item{display:block;background:${PAPER};border-radius:12px;padding:18px 20px;margin-bottom:12px;text-decoration:none;color:${INK};box-shadow:0 1px 3px rgba(16,24,40,.06)}
 .nl-archive-item h2{margin:0;font-size:19px;line-height:1.3}
 .nl-archive-item p{margin:6px 0 0;font-size:14.5px;line-height:1.55;color:${MUTED}}

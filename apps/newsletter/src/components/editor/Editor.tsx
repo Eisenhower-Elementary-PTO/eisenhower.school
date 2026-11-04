@@ -21,7 +21,7 @@ import { EditorContent, useEditor, type Editor as TipTapEditor } from "@tiptap/r
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { LINK_SHORTCUT_LABEL, LinkShortcut, linkSelection } from "./linking.js";
-import Image from "@tiptap/extension-image";
+import { FloatImage, imageFloatOf, setImageFloat } from "./imageFloat.js";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -112,7 +112,11 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
   const sel = editor.state.selection;
   const selectedImage =
     sel instanceof NodeSelection && sel.node.type.name === "image"
-      ? { pos: sel.from, src: String(sel.node.attrs.src ?? "") }
+      ? {
+          pos: sel.from,
+          src: String(sel.node.attrs.src ?? ""),
+          float: imageFloatOf(sel.node.attrs.float),
+        }
       : null;
   const canEditSelected = !!selectedImage?.src && typeOfUrl(selectedImage.src) !== "image/gif";
 
@@ -189,6 +193,16 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
       {canEditSelected && (
         <ToolButton icon="crop" label="Edit image"
           onClick={() => setImageEdit({ source: selectedImage!.src, type: typeOfUrl(selectedImage!.src), replace: selectedImage! })} />
+      )}
+      {selectedImage && (
+        <>
+          {/* Clicking the active side returns the image to the full-width
+              block, so three states need only two buttons. */}
+          <ToolButton label="Float left" active={selectedImage.float === "left"}
+            onClick={() => setImageFloat(editor, selectedImage.float === "left" ? null : "left")} />
+          <ToolButton label="Float right" active={selectedImage.float === "right"}
+            onClick={() => setImageFloat(editor, selectedImage.float === "right" ? null : "right")} />
+        </>
       )}
       <ToolButton icon="table" label="Table"
         onClick={() =>
@@ -270,7 +284,8 @@ export function Editor({
         }),
         Link.configure({ openOnClick: false, autolink: true }),
         LinkShortcut,
-        Image,
+        // Image plus the float attribute (text wraps beside a floated one).
+        FloatImage,
         FontSize,
         // The drag handles store pixel colwidths, which never leave the editor:
         // onUpdate below converts them to percentages (see tableWidths.ts).
