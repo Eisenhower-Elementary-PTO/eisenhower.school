@@ -1660,7 +1660,15 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-site-foot,.nl-subscribe-cta,.nl-print-link,.nl-events-more,.nl-lang,.nl-archive-feed{display:none}
   .nl-wrap{max-width:none;padding:0}
   .nl-card{box-shadow:none;border-radius:0;padding:0}
-  .nl-masthead{padding:0 0 14px}
+  /* The masthead's newsletter NAME (the Settings title) stays off paper: the
+     issue's own title already leads the printed page, and the name above it
+     is site chrome, not content. A configured LOGO still prints — it is the
+     organization's mark, not a second line of text. Hidden title, not hidden
+     masthead, so the logo keeps its block; the padding goes with the text so
+     a logo-less masthead leaves no blank band. */
+  .nl-masthead-title{display:none}
+  .nl-masthead{padding:0}
+  .nl-masthead img{margin:0 auto 14px}
   /* Links keep their href meaning on screen but read as noise in ink. */
   a{color:inherit;text-decoration:none}
   /* Emojis don't survive black-and-white printing — they come out as grey

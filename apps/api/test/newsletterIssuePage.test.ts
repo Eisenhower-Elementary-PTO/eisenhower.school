@@ -239,6 +239,17 @@ describe("the print stylesheet", () => {
     expect(NEWSLETTER_WEB_CSS.slice(0, printAt)).not.toMatch(/\.nl-foot\{[^}]*display:none/);
   });
 
+  it("keeps the newsletter's NAME off paper — the issue's own title leads the page", () => {
+    const printAt = NEWSLETTER_WEB_CSS.indexOf("@media print");
+    // The masthead title is the Settings "newsletter title": site chrome, not
+    // content. A configured logo deliberately still prints.
+    expect(NEWSLETTER_WEB_CSS.slice(printAt)).toContain(".nl-masthead-title{display:none}");
+    // On screen the masthead stays — the hide lives in the print block only.
+    expect(NEWSLETTER_WEB_CSS.slice(0, printAt)).not.toMatch(
+      /\.nl-masthead-title\{[^}]*display:none/,
+    );
+  });
+
   it("keeps the draft banner in ink — that is when it matters most", () => {
     const printBlock = NEWSLETTER_WEB_CSS.slice(NEWSLETTER_WEB_CSS.indexOf("@media print"));
     expect(printBlock).not.toContain("nl-draft-banner");
