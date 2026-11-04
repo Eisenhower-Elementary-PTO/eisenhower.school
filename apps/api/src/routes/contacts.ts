@@ -38,7 +38,7 @@ contacts.get("/contacts/:id/map", async (c) => {
 
   const url = staticMapUrl(c.env, item.geo_lat, item.geo_lng, MAP_W, MAP_H, MAP_ZOOM);
   const res = await fetch(url, {
-    headers: { "User-Agent": `${c.env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Meandmybadself/school-directory)` },
+    headers: { "User-Agent": `${c.env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Eisenhower-Elementary-PTO/school-directory)` },
   });
   if (!res.ok) return c.json({ error: "map_unavailable" }, 502);
   return new Response(res.body, {

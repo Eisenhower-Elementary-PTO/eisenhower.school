@@ -276,7 +276,7 @@ export function formatMoney(cents: number, currency = "usd"): string {
  *  has ever lived in it (secrets are wrangler secrets, and the seed data is
  *  invented), which is the property to re-check before pointing this at a
  *  different repo. */
-export const SOURCE_URL = "https://github.com/Meandmybadself/school-directory";
+export const SOURCE_URL = "https://github.com/Eisenhower-Elementary-PTO/school-directory";
 
 /** The PTO's own site — who the PTO is, the year, and how to donate.
  *

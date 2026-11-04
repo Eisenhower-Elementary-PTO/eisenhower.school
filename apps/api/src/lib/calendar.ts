@@ -58,7 +58,7 @@ function schoolZone(env: Env): string {
 }
 
 function userAgent(env: Env): string {
-  return `${env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Meandmybadself/school-directory)`;
+  return `${env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Eisenhower-Elementary-PTO/school-directory)`;
 }
 
 /** A school-feed event with no SUMMARY still gets a usable title. */

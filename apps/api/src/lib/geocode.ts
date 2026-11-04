@@ -15,7 +15,7 @@ const DEFAULT_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 
 function userAgent(env: Env): string {
   // Identifies the app + a contact URL, per Nominatim's usage policy.
-  return `${env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Meandmybadself/school-directory)`;
+  return `${env.SCHOOL_NAME ?? "School"} School Directory (+https://github.com/Eisenhower-Elementary-PTO/school-directory)`;
 }
 
 /** Progressively coarser variants of an address: full, then dropping leading
