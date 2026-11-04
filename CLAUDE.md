@@ -1292,7 +1292,7 @@ Create `apps/api/migrations/NNNN_description.sql` (next number). Update
 - The Worker deploys (`api`, `redirect`, `home`) and the seven Pages projects
   (`school-directory`, `school-calendar`, `school-newsletter`, `school-store`,
   `school-pto`, `school-lostandfound`, `school-bingo`) ship from one workflow. A new front end
-  means: a step there, an origin in `ALLOWED_ORIGINS`, a line in the root
+  means: an entry in its `pages` matrix, an origin in `ALLOWED_ORIGINS`, a line in the root
   `build` script (CI runs it, so an app missing from it never builds before it
   ships), and a Pages project + custom domain attached BY HAND — CI deploys to
   those, it does not create them.

@@ -3,6 +3,12 @@ name: Deploy
 # Deploy on merge to main, or manually via the Actions tab / `gh workflow run`.
 # No-ops cleanly until the Cloudflare secrets are set:
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+#
+# Shape: three gate jobs in parallel (typecheck, test, build) → `workers`
+# (migrations, then the three Workers, in order) → `pages`, a matrix that
+# builds and deploys the seven front ends side by side. Front ends ship after
+# the API on purpose: a bundle calling a route the live API doesn't have yet is
+# broken until it does.
 on:
   push:
     branches: [main]
@@ -13,12 +19,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Gate. `deploy` needs this, so a typecheck/test/build failure stops the ship
-  # instead of racing it. Before this existed, ci.yml ran on push to main in
-  # PARALLEL with the deploy — which meant a direct push to main could migrate
-  # the production database and publish both apps while its tests were still
-  # running, or after they had already failed.
+  # The gate. `workers` needs all three, so a typecheck/test/build failure
+  # stops the ship instead of racing it. Before this existed, ci.yml ran on
+  # push to main in PARALLEL with the deploy — which meant a direct push to
+  # main could migrate the production database and publish the apps while its
+  # tests were still running, or after they had already failed. Split into
+  # three jobs only so they run at the same time; together they are the same
+  # check as before.
   verify:
+    strategy:
+      fail-fast: true
+      matrix:
+        check: [typecheck, test, build]
+    name: verify (${{ matrix.check }})
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,22 +41,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Test
-        run: pnpm test
-      - name: Build
-        run: pnpm build
+      - run: pnpm ${{ matrix.check }}
 
-  deploy:
+  workers:
     needs: verify
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    outputs:
+      enabled: ${{ steps.guard.outputs.enabled }}
     steps:
-      - uses: actions/checkout@v5
-
       - name: Skip if Cloudflare secrets are absent
         id: guard
         run: |
@@ -54,6 +62,8 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.enabled == 'true'
       - uses: pnpm/action-setup@v6
         if: steps.guard.outputs.enabled == 'true'
       - uses: actions/setup-node@v5
@@ -86,125 +96,116 @@ jobs:
         working-directory: apps/home
         run: pnpm exec wrangler deploy --env production
 
-      - name: Build & deploy web (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/web
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          VITE_CALENDAR_URL: https://calendar.eisenhower.school
-          VITE_NEWSLETTER_URL: https://newsletter.eisenhower.school
-          VITE_PTO_URL: https://pto.eisenhower.school
-          VITE_LOSTFOUND_URL: https://lostandfound.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy dist --project-name school-directory --branch main
+  # Every Pages project (and its custom domain) is created BY HAND once — CI
+  # deploys to them, it does not provision them. Two deploy forms:
+  #   - `dist --project-name …` for pure-static apps;
+  #   - bare `pages deploy` for apps that ship Pages Functions (newsletter,
+  #     store, pto), which deploy from their own wrangler.toml — that is where
+  #     the Functions get API_BASE. See each app's ROUTING.md.
+  # Each entry's `env` is that app's exact VITE_* set, written to GITHUB_ENV;
+  # the sets differ on purpose (an app isn't given its own URL, only pto is
+  # given the store's). Not fail-fast: one app failing to ship shouldn't cancel
+  # the others half-uploaded.
+  pages:
+    needs: workers
+    if: needs.workers.outputs.enabled == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: web
+            deploy: dist --project-name school-directory
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_CALENDAR_URL=https://calendar.eisenhower.school
+              VITE_NEWSLETTER_URL=https://newsletter.eisenhower.school
+              VITE_PTO_URL=https://pto.eisenhower.school
+              VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
 
-      - name: Build & deploy calendar (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/calendar
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          VITE_DIRECTORY_URL: https://directory.eisenhower.school
-          VITE_NEWSLETTER_URL: https://newsletter.eisenhower.school
-          VITE_PTO_URL: https://pto.eisenhower.school
-          VITE_LOSTFOUND_URL: https://lostandfound.eisenhower.school
-          # The school's zone — must match SCHOOL_TIMEZONE in apps/api/wrangler.toml.
-          VITE_SCHOOL_TIMEZONE: America/Chicago
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy dist --project-name school-calendar --branch main
+          # VITE_SCHOOL_TIMEZONE must match SCHOOL_TIMEZONE in apps/api/wrangler.toml.
+          - app: calendar
+            deploy: dist --project-name school-calendar
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_DIRECTORY_URL=https://directory.eisenhower.school
+              VITE_NEWSLETTER_URL=https://newsletter.eisenhower.school
+              VITE_PTO_URL=https://pto.eisenhower.school
+              VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
+              VITE_SCHOOL_TIMEZONE=America/Chicago
 
-      # Unlike the other two Pages projects this one ships Pages Functions (the
-      # public archive at / and /n/:slug), so it deploys from its own
-      # wrangler.toml — which is where the Functions get API_BASE — rather than
-      # naming the output directory and project on the command line.
-      - name: Build & deploy newsletter (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/newsletter
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          VITE_DIRECTORY_URL: https://directory.eisenhower.school
-          VITE_CALENDAR_URL: https://calendar.eisenhower.school
-          VITE_PTO_URL: https://pto.eisenhower.school
-          VITE_LOSTFOUND_URL: https://lostandfound.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy --branch main
+          # Functions: the public archive at / and /n/:slug.
+          - app: newsletter
+            deploy: ""
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_DIRECTORY_URL=https://directory.eisenhower.school
+              VITE_CALENDAR_URL=https://calendar.eisenhower.school
+              VITE_PTO_URL=https://pto.eisenhower.school
+              VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
 
-      # Also ships Functions (the indexed storefront at / and /p/:slug, the
-      # order page at /o/:token, robots.txt and sitemap.xml), so like the
-      # newsletter it deploys from its own wrangler.toml rather than naming the
-      # output directory and project on the command line. See apps/store/ROUTING.md.
-      - name: Build & deploy store (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/store
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          VITE_DIRECTORY_URL: https://directory.eisenhower.school
-          VITE_CALENDAR_URL: https://calendar.eisenhower.school
-          VITE_NEWSLETTER_URL: https://newsletter.eisenhower.school
-          VITE_PTO_URL: https://pto.eisenhower.school
-          VITE_LOSTFOUND_URL: https://lostandfound.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy --branch main
+          # Functions: the indexed storefront at / and /p/:slug, the order
+          # page at /o/:token, robots.txt and sitemap.xml.
+          - app: store
+            deploy: ""
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_DIRECTORY_URL=https://directory.eisenhower.school
+              VITE_CALENDAR_URL=https://calendar.eisenhower.school
+              VITE_NEWSLETTER_URL=https://newsletter.eisenhower.school
+              VITE_PTO_URL=https://pto.eisenhower.school
+              VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
 
-      # The fifth front end, and the third that ships Functions: the indexed
-      # public page at /, robots.txt and sitemap.xml. Deploys from its own
-      # wrangler.toml, which is where those Functions get API_BASE. See
-      # apps/pto/ROUTING.md.
-      #
-      # The Pages project (`school-pto`) and the pto.eisenhower.school custom
-      # domain are created by hand once — CI deploys to them, it does not
-      # provision them. Same as every other front end here.
-      - name: Build & deploy pto (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/pto
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          VITE_DIRECTORY_URL: https://directory.eisenhower.school
-          VITE_CALENDAR_URL: https://calendar.eisenhower.school
-          VITE_NEWSLETTER_URL: https://newsletter.eisenhower.school
-          VITE_STORE_URL: https://store.eisenhower.school
-          VITE_LOSTFOUND_URL: https://lostandfound.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy --branch main
+          # Functions: the indexed public page at /, robots.txt and sitemap.xml.
+          - app: pto
+            deploy: ""
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_DIRECTORY_URL=https://directory.eisenhower.school
+              VITE_CALENDAR_URL=https://calendar.eisenhower.school
+              VITE_NEWSLETTER_URL=https://newsletter.eisenhower.school
+              VITE_STORE_URL=https://store.eisenhower.school
+              VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
 
-      # The sixth front end. Pure static, like web and calendar: the public
-      # browse page is IN the bundle rather than a Function, because it is
-      # noindex by design (invariant 33) and so gains nothing from server
-      # rendering. Named on the command line for that reason.
-      #
-      # The Pages project (`school-lostandfound`) and the
-      # lostandfound.eisenhower.school custom domain are created by hand once —
-      # CI deploys to them, it does not provision them.
-      - name: Build & deploy lost & found (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/lostandfound
-        env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-          # The school's zone — must match SCHOOL_TIMEZONE in apps/api/wrangler.toml.
-          VITE_SCHOOL_TIMEZONE: America/Chicago
-          VITE_DIRECTORY_URL: https://directory.eisenhower.school
-          VITE_CALENDAR_URL: https://calendar.eisenhower.school
-          VITE_NEWSLETTER_URL: https://newsletter.eisenhower.school
-          VITE_PTO_URL: https://pto.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy dist --project-name school-lostandfound --branch main
+          # Pure static: the public browse page is IN the bundle rather than a
+          # Function, because it is noindex by design (invariant 33).
+          # VITE_SCHOOL_TIMEZONE must match SCHOOL_TIMEZONE in apps/api/wrangler.toml.
+          - app: lostandfound
+            deploy: dist --project-name school-lostandfound
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+              VITE_SCHOOL_TIMEZONE=America/Chicago
+              VITE_DIRECTORY_URL=https://directory.eisenhower.school
+              VITE_CALENDAR_URL=https://calendar.eisenhower.school
+              VITE_NEWSLETTER_URL=https://newsletter.eisenhower.school
+              VITE_PTO_URL=https://pto.eisenhower.school
 
-      # The seventh front end: the game-night bingo board. Pure static and
-      # noindex like the lost & found — the live state is a public API GET
-      # (/bingo-public/state), not a server-rendered page, so there is nothing
-      # for a Function to do. The Pages project (`school-bingo`) and the
-      # bingo.eisenhower.school custom domain are created by hand once — CI
-      # deploys to them, it does not provision them.
-      - name: Build & deploy bingo (Pages)
-        if: steps.guard.outputs.enabled == 'true'
-        working-directory: apps/bingo
+          # Pure static and noindex: live state is a public API GET
+          # (/bingo-public/state), so there is nothing for a Function to do.
+          - app: bingo
+            deploy: dist --project-name school-bingo
+            env: |
+              VITE_API_URL=https://api-directory.eisenhower.school
+    name: pages (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set build env
         env:
-          VITE_API_URL: https://api-directory.eisenhower.school
-        run: |
-          pnpm build
-          pnpm exec wrangler pages deploy dist --project-name school-bingo --branch main
+          APP_ENV: ${{ matrix.env }}
+        run: printf '%s\n' "$APP_ENV" >> "$GITHUB_ENV"
+      - name: Build
+        run: pnpm build
+      - name: Deploy
+        run: pnpm exec wrangler pages deploy ${{ matrix.deploy }} --branch main
