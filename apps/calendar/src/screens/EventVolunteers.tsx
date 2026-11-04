@@ -274,6 +274,9 @@ export function EventVolunteers() {
   const [copiedEmails, setCopiedEmails] = useState<number | null>(null);
   /** The list itself, shown only when the browser refused the clipboard. */
   const [emailList, setEmailList] = useState<string | null>(null);
+  /** The test-reminder button's receipt, for the clipboard buttons' reason: a
+   *  send with no visible result reads as a button that did nothing. */
+  const [testSent, setTestSent] = useState(false);
   /** Working copy of the sheet's runbook link. Re-seeded when a different sheet
    *  opens — deliberately not on every sheet refresh, so a position save mid-
    *  typing doesn't clobber the draft. The server normalizes on save, so the
@@ -511,6 +514,24 @@ export function EventVolunteers() {
     }
   };
 
+  /** Proof the two-evenings-before reminder: the server mails it — runbook
+   *  link and every position's shift — to THIS admin's own address, prefixed
+   *  "[Test]". Volunteers get nothing, and the cron's own send is untouched. */
+  const sendTestReminder = async () => {
+    if (!sheet) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.testVolunteerReminder(sheet.id);
+      setTestSent(true);
+      setTimeout(() => setTestSent(false), 2500);
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't send the test reminder."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyLink = async () => {
     if (!sheet) return;
     try {
@@ -640,6 +661,12 @@ export function EventVolunteers() {
             {copiedEmails === null
               ? "Copy volunteer emails"
               : `Copied ${copiedEmails} ${copiedEmails === 1 ? "address" : "addresses"}`}
+          </Btn>
+          {/* Proof of the automated reminder the cron mails two evenings before
+              the event — to YOUR address, never the volunteers'. Offered on
+              drafts too: proofing is wanted before publishing. */}
+          <Btn sm kind="secondary" icon="bolt" disabled={busy} onClick={() => void sendTestReminder()}>
+            {testSent ? "Test sent to you" : "Send test reminder"}
           </Btn>
           <button aria-label="Delete this sheet" title="Delete this sheet" onClick={() => void removeSheet()} style={{ ...iconBtnStyle, marginLeft: "auto" }}>
             <Icon name="x" size={18} />

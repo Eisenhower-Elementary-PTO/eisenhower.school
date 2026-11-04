@@ -84,9 +84,10 @@ bucket_name = "school-directory-lostfound-media"
 
 # Workers AI: the lost & found vision model and text embeddings, and the
 # newsletter composer's assist (lib/newsletterAssist.ts, capped per day by
-# migration 0036 so both features share the free allocation). ALWAYS remote,
+# migration 0036 so both features share the included allocation). ALWAYS remote,
 # even under `wrangler dev`, so local tagging spends the account's real daily
-# allocation (10k neurons on the free plan; a photo costs ~10-30). Optional in
+# allocation (10k neurons/day included; on the account's Paid plan, usage past
+# that is metered rather than refused. A photo costs ~10-30). Optional in
 # code — with no binding, items stay held for staff to publish and the
 # composer hides its assist buttons (env.ts).
 [ai]
@@ -127,18 +128,22 @@ index_name = "school-directory-lostfound"
 #                are set to "daily" in Admin → Notifications
 #   */15 * * * * store: re-drive paid orders that never reached Printful. Short,
 #                because what it recovers is a CHARGED order that hasn't been
-#                printed. Overlaps with the other two are harmless — the handler
+#                printed. Overlaps with the others are harmless — the handler
 #                dispatches on event.cron, and the submission claim is a guarded
 #                UPDATE only one caller can win.
+#   15 0 * * *   volunteer event reminders, two evenings before an event with
+#                sign-ups (~6:15pm Central either side of DST;
+#                lib/volunteerReminders.ts). The sent-marker is a guarded
+#                UPDATE too, so an overlapping fire mails nobody twice.
 #
-# THREE IS THE ACCOUNT'S CEILING. The Workers FREE plan caps an ACCOUNT — not a
-# Worker — at five cron triggers, and these three plus bus-notify's two are
-# exactly five. A fourth here fails the deploy at the trigger step, AFTER the
-# code has uploaded, which looks like a broken deploy of working code. Adding one
-# means freeing a slot or moving to Workers Paid.
+# Cron budget: the account is on Workers PAID (upgraded with the Email Sending
+# cutover, 2026-10-25), which allows 250 cron triggers per account. The Free
+# plan's five-per-account ceiling that used to cap this list at three (plus
+# bus-notify's two) is history — as is the failure mode it carried, where a
+# too-many-triggers deploy died at the trigger step after the code uploaded.
 # Mirrored under env.production below.
 [triggers]
-crons = ["0 */3 * * *", "0 13 * * *", "*/15 * * * *"]
+crons = ["0 */3 * * *", "0 13 * * *", "*/15 * * * *", "15 0 * * *"]
 
 # Rate limiting for the reads that serve ONE family's data to another
 # (invariant 32's routes). The threat this answers is the one the parent who
@@ -253,7 +258,7 @@ binding = "LOSTFOUND_VECTORS"
 index_name = "school-directory-lostfound"
 
 [env.production.triggers]
-crons = ["0 */3 * * *", "0 13 * * *", "*/15 * * * *"]
+crons = ["0 */3 * * *", "0 13 * * *", "*/15 * * * *", "15 0 * * *"]
 
 # Not inherited from the top level — see the note there.
 [[env.production.ratelimits]]

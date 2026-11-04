@@ -234,12 +234,22 @@ async function sheetRowBy(env: Env, column: "slug" | "id", value: string): Promi
 /** This occurrence's end, derived from the SERIES duration rather than stored.
  *  Every occurrence of a rule has the same length, so duration is the durable
  *  fact and the end is arithmetic on the occurrence's own start. Reading it off
- *  a `calendar_event` row would tie the sheet to the disposable cache. */
-function occurrenceEnd(row: SheetRow): string | null {
-  if (!row.event_ends_at) return null;
-  const durationMs = new Date(row.event_ends_at).getTime() - new Date(row.event_starts_at).getTime();
+ *  a `calendar_event` row would tie the sheet to the disposable cache.
+ *  Exported for lib/volunteerReminders.ts, which reads the same three columns
+ *  outside SheetRow — one piece of arithmetic, not two. */
+export function occurrenceEndOf(
+  occurrenceStart: string,
+  eventStartsAt: string,
+  eventEndsAt: string | null,
+): string | null {
+  if (!eventEndsAt) return null;
+  const durationMs = new Date(eventEndsAt).getTime() - new Date(eventStartsAt).getTime();
   if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
-  return new Date(new Date(row.occurrence_start).getTime() + durationMs).toISOString();
+  return new Date(new Date(occurrenceStart).getTime() + durationMs).toISOString();
+}
+
+function occurrenceEnd(row: SheetRow): string | null {
+  return occurrenceEndOf(row.occurrence_start, row.event_starts_at, row.event_ends_at);
 }
 
 function isClosed(row: SheetRow, now: string): boolean {
@@ -498,6 +508,51 @@ interface EmailRow {
   email: string;
 }
 
+/** First reachable address for each of `personIds`, by the two rules above:
+ *  the Person's own `service` email items first (by `sort_order`), then the
+ *  account emails of enabled controlling Users (by how long they have held
+ *  control). Extracted from `sheetVolunteerEmails` so the reminder cron
+ *  (lib/volunteerReminders.ts) resolves addresses by EXACTLY the rules the
+ *  admin's "Email volunteers" button does — a second copy of the two WHERE
+ *  clauses is how the two would come to disagree about what `private`
+ *  withholds (test/volunteerEmails.test.ts evaluates both). */
+export async function firstEmailByPerson(
+  env: Env,
+  personIds: string[],
+): Promise<Map<string, string>> {
+  if (personIds.length === 0) return new Map();
+  const holes = personIds.map(() => "?").join(",");
+  const [own, controllers] = await Promise.all([
+    env.DB.prepare(
+      `SELECT owner_id AS person_id, value AS email
+         FROM contact_item
+        WHERE owner_kind = 'person' AND type = 'email' AND visibility = 'service'
+          AND owner_id IN (${holes})
+        ORDER BY sort_order ASC, created_at ASC`,
+    )
+      .bind(...personIds)
+      .all<EmailRow>(),
+    env.DB.prepare(
+      `SELECT c.person_id, u.email
+         FROM control c
+         JOIN user u ON u.id = c.user_id
+        WHERE c.person_id IN (${holes}) AND u.disabled_at IS NULL
+        ORDER BY c.since ASC, u.id ASC`,
+    )
+      .bind(...personIds)
+      .all<EmailRow>(),
+  ]);
+
+  // Own items are concatenated FIRST, so first-seen-per-person is the precedence
+  // rule above rather than whichever query happened to return a row.
+  const first = new Map<string, string>();
+  for (const r of [...own.results, ...controllers.results]) {
+    const email = r.email.trim();
+    if (email && !first.has(r.person_id)) first.set(r.person_id, email);
+  }
+  return first;
+}
+
 /** The addresses behind one sheet's signups, or null if there is no such sheet.
  *
  *  The signup read needs no LIMIT: a sheet holds at most MAX_POSITIONS
@@ -530,35 +585,7 @@ export async function sheetVolunteerEmails(
   }
   if (personIds.length === 0) return { emails: [], withoutEmail: 0 };
 
-  const holes = personIds.map(() => "?").join(",");
-  const [own, controllers] = await Promise.all([
-    env.DB.prepare(
-      `SELECT owner_id AS person_id, value AS email
-         FROM contact_item
-        WHERE owner_kind = 'person' AND type = 'email' AND visibility = 'service'
-          AND owner_id IN (${holes})
-        ORDER BY sort_order ASC, created_at ASC`,
-    )
-      .bind(...personIds)
-      .all<EmailRow>(),
-    env.DB.prepare(
-      `SELECT c.person_id, u.email
-         FROM control c
-         JOIN user u ON u.id = c.user_id
-        WHERE c.person_id IN (${holes}) AND u.disabled_at IS NULL
-        ORDER BY c.since ASC, u.id ASC`,
-    )
-      .bind(...personIds)
-      .all<EmailRow>(),
-  ]);
-
-  // Own items are concatenated FIRST, so first-seen-per-person is the precedence
-  // rule above rather than whichever query happened to return a row.
-  const first = new Map<string, string>();
-  for (const r of [...own.results, ...controllers.results]) {
-    const email = r.email.trim();
-    if (email && !first.has(r.person_id)) first.set(r.person_id, email);
-  }
+  const first = await firstEmailByPerson(env, personIds);
 
   const emails: string[] = [];
   const seen = new Set<string>();
@@ -838,14 +865,22 @@ function moveStatements(
   ts: string,
 ): D1PreparedStatement[] {
   const delta = new Date(to).getTime() - new Date(sheet.occurrence_start).getTime();
+  // A real move clears `reminder_sent_at` (migration 0041): the reminder that
+  // went out named the instant the sheet is LEAVING, so the date it now
+  // occupies has earned a fresh one — the cron re-reminds two evenings before
+  // the new date. A zero-delta "move" between two spellings of one instant
+  // changes nothing a reminder said, so the marker stays.
   const out = [
-    env.DB.prepare(
-      "UPDATE volunteer_sheet SET occurrence_start = ?, closes_at = ?, updated_at = ? WHERE id = ?",
-    ).bind(to, shifted(sheet.closes_at, delta), ts, sheet.id),
+    delta === 0
+      ? env.DB.prepare(
+          "UPDATE volunteer_sheet SET occurrence_start = ?, closes_at = ?, updated_at = ? WHERE id = ?",
+        ).bind(to, shifted(sheet.closes_at, delta), ts, sheet.id)
+      : env.DB.prepare(
+          "UPDATE volunteer_sheet SET occurrence_start = ?, closes_at = ?, updated_at = ?, reminder_sent_at = NULL WHERE id = ?",
+        ).bind(to, shifted(sheet.closes_at, delta), ts, sheet.id),
   ];
-  // A zero delta is a "move" between two spellings of one instant, and a
-  // position with no window has nothing dated off the occurrence. Neither is
-  // worth a statement.
+  // A position with no window has nothing dated off the occurrence, and a zero
+  // delta moves nothing. Neither is worth a statement.
   if (delta === 0) return out;
   for (const p of positions) {
     if (p.starts_at === null && p.ends_at === null) continue;

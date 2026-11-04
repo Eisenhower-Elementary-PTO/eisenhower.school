@@ -15,8 +15,8 @@
 //   outage — therefore leaves a state that can be read and resumed rather than
 //   one nobody can interpret. Since the October 2026 send (69 of 94 recipients
 //   failed in one unpaced, unbounded blast), resuming is also the NORMAL path,
-//   not only recovery: each run is budgeted under the Workers free plan's
-//   per-invocation subrequest cap and paced under Resend's per-second meter,
+//   not only recovery: each run is budgeted under the per-invocation
+//   subrequest cap and paced under Resend's per-second meter,
 //   and `resumePendingSends` (riding the store's 15-minute cron) carries a
 //   yielded or killed run forward. A run processes 'pending' rows only;
 //   'failed' means Resend gave a verdict re-sending can't change, and only the
@@ -44,10 +44,13 @@ export const CONCURRENCY = 5;
  *  stays 'pending' and is re-attempted on a later pass. */
 export const SEND_PACE_MS = RESEND_PACE_MS;
 
-/** Resend attempts one invocation may make. The account runs on the Workers
- *  FREE plan (see the cron comment in src/index.ts), which caps SUBREQUESTS per
- *  invocation at 50 — the same October send hit it: attempt ~50 onward failed
- *  with "Too many subrequests" before any fetch was made. 40 leaves headroom
+/** Resend attempts one invocation may make. Sized when the account ran on the
+ *  Workers FREE plan, which caps SUBREQUESTS per invocation at 50 — the same
+ *  October send hit it: attempt ~50 onward failed with "Too many subrequests"
+ *  before any fetch was made. The account has since moved to PAID (cap 1000 —
+ *  see the cron comment in src/index.ts), so this budget is now pure headroom;
+ *  it stays small on purpose, because the resume cadence makes a larger burst
+ *  buy nothing but blast radius. 40 leaves headroom
  *  for whatever shares the invocation (the resume path rides the 15-minute
  *  cron beside the store's order retry). The budget counts FETCHES only, and
  *  that rests on measurement rather than the docs: in the October run the D1

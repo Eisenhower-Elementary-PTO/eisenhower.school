@@ -2255,6 +2255,15 @@ export type AuditAction =
   // changing hands is exactly the kind of thing someone later asks about.
   | "volunteer.signup.created"
   | "volunteer.signup.deleted"
+  /** The reminder cron mailed a sheet's volunteers, two evenings before the
+   *  event (lib/volunteerReminders.ts, migration 0041). No actor — a cron is
+   *  not a person. `detail` keeps the counts; the addresses it reached are
+   *  never recorded anywhere. */
+  | "volunteer.reminder.sent"
+  /** An admin proofed the reminder — `newsletter.test_sent`'s twin. Mails only
+   *  the addresses the admin typed (default: their own), touches no
+   *  `reminder_sent_at`, and is Slack-silent like every other test. */
+  | "volunteer.reminder.test_sent"
   /** A Person was added to the directory. The companion to `person.updated`,
    *  which was for a long time the only thing said about a Person at all — so a
    *  row appearing was invisible to this log while every later edit to it was

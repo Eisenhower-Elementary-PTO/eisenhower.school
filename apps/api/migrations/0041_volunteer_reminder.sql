@@ -1,0 +1,17 @@
+-- 0041_volunteer_reminder.sql — the sent-marker for volunteer event reminders.
+--
+-- Two evenings before an event with sign-ups, every address holding a spot on
+-- its sheet gets one reminder email (lib/volunteerReminders.ts, on its own cron
+-- — see wrangler.toml [triggers]). This column is what makes that send
+-- once-and-only-once: the cron claims a sheet with a guarded
+-- `UPDATE … WHERE reminder_sent_at IS NULL` and checks `meta.changes`, the same
+-- CAS idiom as the overfill guard (migration 0012) and the store's status
+-- transitions (invariant 26), so an overlapping or re-driven tick finds the
+-- claim taken and sends nothing twice.
+--
+-- `moveStatements` in lib/volunteers.ts CLEARS it when a sheet moves to a new
+-- instant (reanchorSheets or the admin's manual repair): the thing the reminder
+-- announced no longer happens then, so the sheet earns a fresh reminder for the
+-- date it now occupies. A wholly failed send also releases its own claim, so
+-- the next evening retries rather than losing the reminder forever.
+ALTER TABLE volunteer_sheet ADD COLUMN reminder_sent_at TEXT;

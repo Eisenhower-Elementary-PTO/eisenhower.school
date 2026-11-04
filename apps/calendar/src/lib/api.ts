@@ -257,6 +257,14 @@ export const api = {
   // thing on this screen worth fetching only when it is about to be used.
   volunteerSheetEmails: (sheetId: string) =>
     request<VolunteerEmailsDTO>(`/admin/volunteer-sheets/${sheetId}/emails`),
+  // Proof the two-evenings-before reminder email: sends it (runbook link and
+  // all) to the admin's own address, never the volunteers'. Body may carry
+  // { to: string[] } to proof to someone else instead.
+  testVolunteerReminder: (sheetId: string) =>
+    request<{ ok: boolean; sent: number; attempted: number }>(
+      `/admin/volunteer-sheets/${sheetId}/test-reminder`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
   addVolunteerSheet: (eventId: string, body: VolunteerSheetInput) =>
     request<{ sheet: VolunteerSheetDTO }>(`/admin/managed-events/${eventId}/sheets`, {
       method: "POST",

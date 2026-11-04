@@ -10,6 +10,7 @@ import { retryStuckOrders, sweepAbandonedOrders } from "./lib/storeOrder.js";
 import { resumePendingSends } from "./lib/newsletterSend.js";
 import { allowedOrigins } from "./lib/db.js";
 import { sendNewSubscriberDigest, sendNewUserDigest } from "./lib/notify.js";
+import { sendVolunteerReminders } from "./lib/volunteerReminders.js";
 import { runDailySweeps } from "./lib/sweep.js";
 import { contextMiddleware } from "./middleware/context.js";
 import { requireAuth, sessionMiddleware, UnauthorizedError } from "./middleware/session.js";
@@ -229,24 +230,35 @@ app.notFound((c) => c.json({ error: "not_found" }, 404));
 //                   budgeted under the per-invocation subrequest cap, and this
 //                   tick is what drains the remainder of a large audience.
 //
-// Registering it took the account to its ceiling: the Workers FREE plan allows
-// five cron triggers per ACCOUNT, and these three plus bus-notify's two are all
-// five. A fourth schedule here will fail the deploy at the trigger step, after
-// the code has already uploaded — working code, broken-looking deploy. That is
-// the cost to weigh before adding one.
+// And a fourth for the volunteers:
+//   15 0 * * *   — volunteer event reminders, two evenings before an event
+//                  with sign-ups (lib/volunteerReminders.ts). 00:15 UTC is
+//                  6:15pm CST / 7:15pm CDT — evening either side of the DST
+//                  change with no zone math in the schedule; the due test
+//                  itself is in school-local days.
+//
+// Cron budget: the account moved to Workers PAID with the Email Sending
+// cutover (2026-10-25), so the Free plan's five-triggers-per-ACCOUNT ceiling
+// that capped this list at three (plus bus-notify's two) no longer binds —
+// Paid allows 250. Comments elsewhere that cite the old ceiling are history.
 const DIGEST_CRON = "0 13 * * *";
 const STORE_CRON = "*/15 * * * *";
+const REMINDER_CRON = "15 0 * * *";
 
 const scheduled: ExportedHandlerScheduledHandler<Env> = (event, env, ctx) => {
   if (event.cron === STORE_CRON) {
     ctx.waitUntil(retryStuckOrders(env));
-    // Newsletter sends are budgeted per invocation (the free plan's subrequest
-    // cap — see lib/newsletterSend.ts) and yield with recipients still pending;
-    // this is what carries a yielded or killed run forward. It rides the store's
-    // schedule because the account is at its five-trigger ceiling (above), and
-    // shares the invocation's subrequest budget with retryStuckOrders — which is
-    // why SEND_BUDGET leaves headroom.
+    // Newsletter sends are budgeted per invocation (the subrequest cap — see
+    // lib/newsletterSend.ts) and yield with recipients still pending; this is
+    // what carries a yielded or killed run forward. It rides the store's
+    // schedule (it predates the paid upgrade and a 15-minute cadence suits it)
+    // and shares the invocation's subrequest budget with retryStuckOrders —
+    // which is why SEND_BUDGET leaves headroom.
     ctx.waitUntil(resumePendingSends(env));
+    return;
+  }
+  if (event.cron === REMINDER_CRON) {
+    ctx.waitUntil(sendVolunteerReminders(env));
     return;
   }
   if (event.cron === DIGEST_CRON) {

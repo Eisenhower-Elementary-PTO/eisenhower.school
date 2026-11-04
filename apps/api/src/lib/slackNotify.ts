@@ -419,6 +419,27 @@ const FORMATTERS = {
     );
   },
 
+  /** The two-evenings-before reminder went out (lib/volunteerReminders.ts).
+   *  No actor — a cron is not a person, so it is phrased as a thing that
+   *  happened, like the store's webhook lines. Counts and the event's public
+   *  title only: the addresses it reached are exactly what may not cross this
+   *  seam. The zero-recipient form is the line that needs a human — everyone
+   *  on the sheet was unreachable. One line per event with volunteers, a few
+   *  a month (invariant 22's counting rule). */
+  "volunteer.reminder.sent": ({ env, notify }) => {
+    const n = num(notify, "recipients");
+    if (n === 0) {
+      return (
+        `:alarm_clock: Volunteer reminder for *${str(notify, "eventTitle")}*${whenOf(env, notify)}` +
+        ` found no reachable addresses.${sheetLink(env, notify)}`
+      );
+    }
+    return (
+      `:alarm_clock: Volunteer reminder sent to ${n} address${n === 1 ? "" : "es"}` +
+      ` for *${str(notify, "eventTitle")}*${whenOf(env, notify)}.${sheetLink(env, notify)}`
+    );
+  },
+
   // ── Newsletter: the two "it actually left the building" events ──
   "newsletter.issue.sent": async ({ env, entityId, notify, actor }) => {
     const issue = await issueLabel(env, entityId);

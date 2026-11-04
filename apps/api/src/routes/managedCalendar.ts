@@ -11,6 +11,10 @@ import type {
   VolunteerPositionInput,
   VolunteerSheetInput,
 } from "@sd/shared";
+import { normalizeEmail } from "../lib/db.js";
+import { isEmail } from "../lib/newsletter.js";
+import { sendEmailResult } from "../lib/email.js";
+import { buildTestReminder } from "../lib/volunteerReminders.js";
 import type { HonoEnv } from "../env.js";
 import type { AuditDraft } from "../lib/audit.js";
 import { requireAuth } from "../middleware/session.js";
@@ -350,6 +354,10 @@ managedCalendar.post("/managed-events/:id/sheets", async (c) => {
   }
 });
 
+/** The newsletter's MAX_TEST_RECIPIENTS, for the same reason: a test is a
+ *  proof, not a distribution list. */
+const MAX_TEST_REMINDERS = 10;
+
 /** GET /admin/volunteer-sheets/:id — one sheet with its roster and orphan flag. */
 managedCalendar.get("/volunteer-sheets/:id", async (c) => {
   const auth = requireAuth(c);
@@ -372,6 +380,63 @@ managedCalendar.get("/volunteer-sheets/:id/emails", async (c) => {
   const result = await sheetVolunteerEmails(c.env, c.req.param("id"));
   if (!result) return c.json({ error: "not_found" }, 404);
   return c.json(result);
+});
+
+/** POST /admin/volunteer-sheets/:id/test-reminder { to?: string[] } — proof the
+ *  reminder email before the cron sends it (newsletter test-send's twin).
+ *
+ *  Sends the reminder as a volunteer holding EVERY position would get it
+ *  (`buildTestReminder` — same renderer as the cron, runbook link included),
+ *  to the addresses the admin typed, defaulting to their own account email.
+ *  Never to the volunteers, never touching `reminder_sent_at`: the subject is
+ *  prefixed so a forwarded test can't read as the real thing, and the real
+ *  send remains the cron's alone. Works on drafts and orphans — proofing is
+ *  wanted BEFORE publishing, and the reader is an admin. */
+managedCalendar.post("/volunteer-sheets/:id/test-reminder", async (c) => {
+  const auth = requireAuth(c);
+  if (!auth.isSystemAdmin) return c.json({ error: "forbidden" }, 403);
+
+  const body = await c.req.json<{ to?: string[] }>().catch(() => null);
+  const raw = Array.isArray(body?.to) && body.to.length > 0 ? body.to : [auth.email ?? ""];
+  const to = [...new Set(raw.map((e) => normalizeEmail(String(e))).filter(isEmail))];
+  if (to.length === 0) {
+    return c.json({ error: "invalid_body", message: "Add at least one valid address." }, 400);
+  }
+  if (to.length > MAX_TEST_REMINDERS) {
+    return c.json(
+      { error: "too_many", message: `Test sends are limited to ${MAX_TEST_REMINDERS} addresses.` },
+      400,
+    );
+  }
+
+  const built = await buildTestReminder(c.env, c.req.param("id"));
+  if (!built) return c.json({ error: "not_found" }, 404);
+  if (built.positionCount === 0) {
+    return c.json(
+      { error: "no_positions", message: "Add a position first — the reminder lists the shifts." },
+      400,
+    );
+  }
+
+  let sent = 0;
+  for (const address of to) {
+    // Same channel the cron will use, or the admin proofs a different sender
+    // identity than the volunteers get (the newsletter test's reasoning).
+    const result = await sendEmailResult(c.env, {
+      ...built.msg,
+      to: address,
+      subject: `[Test] ${built.msg.subject}`,
+    });
+    if (result.ok) sent++;
+  }
+
+  c.var.audit.push({
+    action: "volunteer.reminder.test_sent",
+    entityKind: "volunteer_sheet",
+    entityId: c.req.param("id"),
+    detail: { count: to.length },
+  });
+  return c.json({ ok: true, sent, attempted: to.length });
 });
 
 /** PATCH /admin/volunteer-sheets/:id { intro?, runbookUrl?, closesAt?, published? }.

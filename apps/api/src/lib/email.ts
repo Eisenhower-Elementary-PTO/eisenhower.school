@@ -431,6 +431,70 @@ You're getting this because your address is on the lost & found's claim notifica
   };
 }
 
+export interface VolunteerReminderShift {
+  /** The position's title, admin-entered. */
+  title: string;
+  /** "5:00 – 7:00 PM" in the school's zone, or "" for an all-day commitment. */
+  window: string;
+}
+
+/**
+ * Two evenings before an event, to each address holding a spot on its volunteer
+ * sheet (lib/volunteerReminders.ts).
+ *
+ * Deliberately names NOBODY — not the volunteer, not the child a parent signed
+ * up. The shifts and their windows are the whole content, the same posture as
+ * `signupIcsOf` (invariant 13): the recipient knows who in their family they
+ * signed up, and an email forwards. "Your family signed up" is true whether the
+ * recipient claimed the spot for themselves or for a child. English-only like
+ * every transactional template in this file.
+ *
+ * The RUNBOOK link rides along when the sheet has one (migration 0039). That
+ * is members-only content — it never crosses `publicSheetOf` — and this email
+ * does not widen the audience: the recipients are resolved from the sheet's
+ * own signups, exactly the signed-in families the event page already shows it
+ * to, and the people who most need it on the day. It is a link, not the
+ * document; the document keeps its own access control.
+ */
+export function volunteerReminderEmail(
+  env: Env,
+  args: {
+    eventTitle: string;
+    /** "Thursday, November 5" — minted in the school's zone by the caller. */
+    when: string;
+    location: string | null;
+    shifts: VolunteerReminderShift[];
+    /** The sheet's permanent `/v/:slug` URL, or null with no CALENDAR_URL. */
+    sheetUrl: string | null;
+    /** The sheet's admin-entered runbook link, if any (held to http(s) on
+     *  write by `normalizeRunbookUrl`, so it is safe as an anchor). */
+    runbookUrl: string | null;
+  },
+): SendArgs {
+  const school = env.SCHOOL_NAME;
+  const one = args.shifts.length === 1;
+  const lines = args.shifts.map((s) => `• ${s.title}${s.window ? ` — ${s.window}` : ""}`);
+  const rows = args.shifts
+    .map(
+      (s) =>
+        `<li><strong>${esc(s.title)}</strong>${s.window ? ` <span style="color:#56636f">— ${esc(s.window)}</span>` : ""}</li>`,
+    )
+    .join("\n");
+  const where = args.location ? `\nWhere: ${args.location}` : "";
+  const runbook = args.runbookUrl ? `\n\nHow this event is run (volunteer runbook):\n${args.runbookUrl}` : "";
+  const link = args.sheetUrl ? `\n\nEvent details and your sign-up:\n${args.sheetUrl}` : "";
+  return {
+    to: "",
+    subject: `Reminder: volunteering at ${args.eventTitle} — ${args.when}`,
+    text: `Your family signed up to volunteer at ${args.eventTitle}.\n\nWhen: ${args.when}${where}\n\nYour ${one ? "shift" : "shifts"}:\n${lines.join("\n")}${runbook}${link}\n\nThank you for helping out — ${school}.`,
+    html: `<p>Your family signed up to volunteer at <strong>${esc(args.eventTitle)}</strong>.</p>
+<p>When: <strong>${esc(args.when)}</strong>${args.location ? `<br>Where: ${esc(args.location)}` : ""}</p>
+<p>Your ${one ? "shift" : "shifts"}:</p>
+<ul>${rows}</ul>
+${args.runbookUrl ? `<p><a href="${args.runbookUrl}">How this event is run</a> — the volunteer runbook.</p>\n` : ""}${args.sheetUrl ? `<p><a href="${args.sheetUrl}">Event details and your sign-up</a></p>\n` : ""}<p style="color:#56636f;font-size:13px">Thank you for helping out — ${esc(school)}.</p>`,
+  };
+}
+
 export function magicLinkEmail(env: Env, link: string): SendArgs {
   const school = env.SCHOOL_NAME;
   return {

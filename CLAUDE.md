@@ -18,6 +18,11 @@ Cloudflare email (Email Sending + Routing on `sitemail.eisenhower.school`;
 Resend as the dormant fallback channel), Nominatim geocoding, Stripe +
 Printful (store), Workers AI + Vectorize (lost & found), and an optional
 Slack webhook.
+The account is on **Workers Paid** (upgraded for Email Sending, 2026-10-25).
+Any comment citing a Free-plan ceiling — five cron triggers per account, 50
+subrequests per invocation — describes history, not a current constraint:
+Paid allows 250 triggers and 1000 subrequests. Budgets sized against the old
+caps (`SEND_BUDGET`) are kept deliberately, as headroom.
 
 The directory is **members-only; there is no public visibility level.** The
 deliberately-open surfaces are: the front door, the calendar agenda and event
@@ -339,6 +344,32 @@ Worker, sharing one session:
    `person` rows. `test/volunteerEmails.test.ts` is behavioural (fake D1
    evaluates both WHERE clauses). Sending from the API was rejected: the mailer
    is for mail the SYSTEM sends.
+   **The system DOES send one mail: a reminder, two evenings before the
+   event** — `sendVolunteerReminders` (`lib/volunteerReminders.ts`) on its own
+   cron (`15 0 * * *` ≈ 6:15pm Central). Due = published sheet with ≥1 signup,
+   occurrence still on the calendar (an orphaned sheet's date is one the series
+   no longer produces), 1–2 school-local days ahead — 2 is the design, 1 the
+   catch-up for a missed tick or a late-published sheet. `reminder_sent_at`
+   (migration 0041) is a CAS claim (guarded `UPDATE … WHERE … IS NULL`);
+   `moveStatements` clears it on a real move so a re-dated event re-reminds for
+   its new date, and a wholly failed send releases its own claim (matched by
+   value) so the next evening retries. Addresses resolve through
+   **`firstEmailByPerson`** — the same two rules as "Email volunteers",
+   extracted from it so the clauses can't fork. One message per ADDRESS, every
+   shift that address stands behind, duplicates collapsed. The email names
+   NOBODY and the module reads no `person` row: position titles + shift windows
+   (the public sheet's content) plus the `/v/:slug` link — and the sheet's
+   **runbook link**, which stays members-only in spirit: the recipients ARE the
+   sheet's signed-up families, the audience the event page already shows it to.
+   `volunteer.reminder.sent` is written from the cron through `writeAudit`
+   (null actor, like the email intake) and Slack-curated — counts and the
+   public title only; the zero-recipient line is the one that needs a human.
+   **Proofing is `POST /admin/volunteer-sheets/:id/test-reminder`**
+   (`buildTestReminder` — same renderer, built from POSITIONS so a draft with
+   no signups can be proofed; subject prefixed `[Test]`; mails the admin's own
+   address or up to 10 they typed, never the volunteers; audited
+   `volunteer.reminder.test_sent`, Slack-silent). The button lives on the
+   calendar's sheet admin screen. `test/volunteerReminders.test.ts`.
 
 14. **Public newsletter sign-up is double opt-in; `POST
    /newsletter-public/subscribe` writes no subscription** — it only mints a
