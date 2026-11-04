@@ -117,8 +117,9 @@
 /* Tables, mirroring the renderer's .nl-table look so the draft reads like the
    issue — except the cell borders, which the render deliberately omits (email,
    archive and print alike): here they're dashed editing guides, since an
-   author can't put a cursor in a cell they can't see. Fixed layout: resizing
-   is off, so columns share the width evenly. */
+   author can't put a cursor in a cell they can't see. Fixed layout, like the
+   rendered issue's: untouched columns share the width evenly, and a stored
+   percentage width (each cell's style, from widthPct) binds exactly. */
 .nlx-editor .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
@@ -138,6 +139,21 @@
 .nlx-editor .ProseMirror th { font-weight: 700; background: var(--bg-2); }
 .nlx-editor .ProseMirror th > p,
 .nlx-editor .ProseMirror td > p { margin: 0; }
+/* Column drag-resizing (prosemirror-tables). The handle is the grab target on
+   a cell's right edge; the plugin positions it against the cell, which is
+   already position: relative above. Dragged pixel widths are editor-only —
+   the save boundary converts them to percentages (tableWidths.ts). */
+.nlx-editor .ProseMirror .tableWrapper { overflow-x: auto; }
+.nlx-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: var(--blue);
+  pointer-events: none;
+}
+.nlx-editor .ProseMirror.resize-cursor { cursor: col-resize; }
 /* ProseMirror paints a cell-range selection via this overlay class. */
 .nlx-editor .ProseMirror .selectedCell::after {
   content: "";

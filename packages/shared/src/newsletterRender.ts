@@ -195,6 +195,19 @@ function clampSpan(raw: unknown): number {
   return Math.min(Math.max(n, 1), 20);
 }
 
+/** A cell's column width as a PERCENTAGE of its table, or nothing. Percentages
+ *  and never pixels, by design: a percentage authored on a wide screen means
+ *  the same thing in the 600px email, on the archive page and on paper, which
+ *  is exactly what a stored pixel width (TipTap's `colwidth`) does not. One
+ *  decimal place is plenty; out of range is dropped, leaving the column
+ *  flexible, like every other attribute this file refuses. Checked on write
+ *  AND re-checked at render, the clampSpan precedent. */
+function cellWidthPct(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const pct = Math.round(raw * 10) / 10;
+  return pct >= 1 && pct <= 100 ? pct : null;
+}
+
 function sanitizeMarks(raw: unknown): NewsletterNode["marks"] {
   if (!Array.isArray(raw)) return undefined;
   const out: NonNullable<NewsletterNode["marks"]> = [];
@@ -303,14 +316,21 @@ function sanitizeNode(raw: unknown, path: string): NewsletterNode | NewsletterNo
     }
     case "tableHeader":
     case "tableCell": {
-      // Only the spans survive — TipTap's `colwidth` (column resizing) is
-      // deliberately dropped: a fixed pixel width authored on a wide screen is
-      // exactly what breaks a 600px email, so the renderer never emits one and
-      // the editor has resizing turned off to match.
+      // The spans and a PERCENTAGE column width survive. TipTap's `colwidth`
+      // (pixel resizing) is still deliberately dropped: a fixed pixel width
+      // authored on a wide screen is exactly what breaks a 600px email. The
+      // composer's drag-resize therefore converts its pixels to `widthPct` at
+      // the save boundary (apps/newsletter tableWidths.ts) and percentages are
+      // the only width this document format carries.
       const attrs = (node.attrs ?? {}) as Record<string, unknown>;
+      const widthPct = cellWidthPct(attrs.widthPct);
       return {
         type,
-        attrs: { colspan: clampSpan(attrs.colspan), rowspan: clampSpan(attrs.rowspan) },
+        attrs: {
+          colspan: clampSpan(attrs.colspan),
+          rowspan: clampSpan(attrs.rowspan),
+          ...(widthPct != null ? { widthPct } : {}),
+        },
         content: children,
       };
     }
@@ -1049,12 +1069,25 @@ function renderTable(node: NewsletterNode, ctx: Ctx): string {
   // lands in the middle of the neighbouring column. Links in cells stay
   // ordinary links, like the events block's generated ones.
   const inner: Ctx = { ...ctx, linkQrs: null, qrSink: null };
-  const rows = (node.content ?? [])
-    .filter((r) => r.type === "tableRow")
-    .map((r) => renderTableRow(r, inner))
-    .join("");
+  const rowNodes = (node.content ?? []).filter((r) => r.type === "tableRow");
+  const rows = rowNodes.map((r) => renderTableRow(r, inner)).join("");
   if (!rows) return "";
-  return `<table cellpadding="0" cellspacing="0" border="0" width="100%"${attr(ctx, "nl-table", `width:100%;border-collapse:collapse;margin:0 0 16px`)}>${rows}</table>`;
+  // Percentage column widths only bind reliably under fixed layout (auto
+  // layout treats them as hints and lets content win), so a table with any
+  // authored width gets table-layout:fixed — inline for email, a class for the
+  // web page, whose @media print block inherits it, so paper agrees too. A
+  // widthless table keeps auto layout: fixed would force equal columns where
+  // the author asked for nothing.
+  const sized = rowNodes.some((r) =>
+    (r.content ?? []).some(
+      (c) =>
+        (c.type === "tableHeader" || c.type === "tableCell") &&
+        cellWidthPct((c.attrs as Record<string, unknown> | undefined)?.widthPct) != null,
+    ),
+  );
+  const cls = sized ? "nl-table nl-table-fixed" : "nl-table";
+  const layout = sized ? "table-layout:fixed;" : "";
+  return `<table cellpadding="0" cellspacing="0" border="0" width="100%"${attr(ctx, cls, `width:100%;${layout}border-collapse:collapse;margin:0 0 16px`)}>${rows}</table>`;
 }
 
 function renderTableRow(row: NewsletterNode, ctx: Ctx): string {
@@ -1072,8 +1105,16 @@ function renderTableCell(cell: NewsletterNode, ctx: Ctx): string {
   const colspan = clampSpan(a.colspan);
   const rowspan = clampSpan(a.rowspan);
   const spans = `${colspan > 1 ? ` colspan="${colspan}"` : ""}${rowspan > 1 ? ` rowspan="${rowspan}"` : ""}`;
+  // An authored column width rides as the HTML width ATTRIBUTE in both modes —
+  // it's what Outlook's Word engine lays out with, and in the browser it maps
+  // to the width property, so the classed web/print output needs no inline
+  // style. Email restates it in the style too, like every other cell style.
+  const widthPct = cellWidthPct(a.widthPct);
+  const width = widthPct != null ? ` width="${widthPct}%"` : "";
   const base = `padding:8px 10px;font-size:15px;line-height:1.5;color:${INK};font-family:${FONT};text-align:left;vertical-align:top`;
-  const style = header ? `${base};font-weight:700;background:${BACKDROP}` : base;
+  const style =
+    (header ? `${base};font-weight:700;background:${BACKDROP}` : base) +
+    (widthPct != null ? `;width:${widthPct}%` : "");
   const styled = attr(ctx, header ? "nl-th" : "nl-td", style);
   // The single-paragraph cell is unwrapped, like a list item's, so the common
   // cell doesn't inherit the paragraph's bottom margin or its 16px body size.
@@ -1082,7 +1123,7 @@ function renderTableCell(cell: NewsletterNode, ctx: Ctx): string {
     kids.length === 1 && kids[0]?.type === "paragraph"
       ? renderChildren(kids[0].content, ctx)
       : renderChildren(kids, ctx);
-  return `<${tag}${spans}${styled}>${inner}</${tag}>`;
+  return `<${tag}${spans}${width}${styled}>${inner}</${tag}>`;
 }
 
 /** One render's context from the public options. Shared by the body entry
@@ -1661,6 +1702,9 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-hr{border:0;border-top:1px solid ${RULE};margin:26px 0}
 .nl-img{display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px}
 .nl-table{width:100%;border-collapse:collapse;margin:0 0 16px}
+/* Authored column widths (the cells' width="NN%" attributes) only bind under
+   fixed layout; the class applies on screen and in print alike. */
+.nl-table-fixed{table-layout:fixed}
 .nl-th,.nl-td{padding:8px 10px;font-size:15px;line-height:1.5;text-align:left;vertical-align:top}
 .nl-th{font-weight:700;background:${BACKDROP}}
 /* A multi-paragraph cell keeps the cell's measure, not the body's. */

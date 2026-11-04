@@ -10,8 +10,11 @@
 // hard, but because each one is another thing to get right across Gmail,
 // Outlook and Apple Mail, and none of them earn that for a school newsletter.
 // Tables cleared that bar (a lunch menu or a schedule is a table or it is
-// nothing), with resizing OFF: the renderer never emits a column width, because
-// a pixel width authored on a wide screen is what breaks a 600px email.
+// nothing). Column resizing works in PERCENTAGES: the drag handles are
+// pixel-based and stay editor-local; what leaves the editor is `widthPct`
+// (tableWidths.ts), because a pixel width authored on a wide screen is what
+// breaks a 600px email, while a percentage means the same thing there, on the
+// archive page and in print.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor as TipTapEditor } from "@tiptap/react";
@@ -21,9 +24,13 @@ import { LINK_SHORTCUT_LABEL, LinkShortcut, linkSelection } from "./linking.js";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
-import TableCell from "@tiptap/extension-table-cell";
-import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
+import {
+  PctTableCell,
+  PctTableHeader,
+  clearColumnWidths,
+  normalizeTableWidths,
+} from "./tableWidths.js";
 import { NodeSelection } from "@tiptap/pm/state";
 import { isNewsletterFontSize, type NewsletterFontSize, type NewsletterNode } from "@sd/shared";
 import { Icon, type IconName } from "../Icon.js";
@@ -198,6 +205,7 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
           <ToolButton label="− Col" onClick={() => editor.chain().focus().deleteColumn().run()} />
           <ToolButton label="Header" active={editor.isActive("tableHeader")}
             onClick={() => editor.chain().focus().toggleHeaderRow().run()} />
+          <ToolButton label="Auto widths" onClick={() => clearColumnWidths(editor)} />
           <ToolButton icon="x" label="Delete table"
             onClick={() => editor.chain().focus().deleteTable().run()} />
         </>
@@ -264,17 +272,17 @@ export function Editor({
         LinkShortcut,
         Image,
         FontSize,
-        // Resizing stays off: the sanitizer drops `colwidth` and the renderer
-        // never emits one, so offering the drag handle would lie to the author.
-        Table.configure({ resizable: false }),
+        // The drag handles store pixel colwidths, which never leave the editor:
+        // onUpdate below converts them to percentages (see tableWidths.ts).
+        Table.configure({ resizable: true, cellMinWidth: 48 }),
         TableRow,
-        TableHeader,
-        TableCell,
+        PctTableHeader,
+        PctTableCell,
         Placeholder.configure({ placeholder: "Write the newsletter…" }),
         EventsBlock.configure({ accentColor, timeZone, calendarUrl }),
       ],
       content,
-      onUpdate: ({ editor: e }) => onChange(e.getJSON() as NewsletterNode),
+      onUpdate: ({ editor: e }) => onChange(normalizeTableWidths(e)),
     },
     // Only rebuild when the mode flips, or when something the events preview
     // draws with changes. Re-creating on every content change would reset the

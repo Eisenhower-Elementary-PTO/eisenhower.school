@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   EVENTS_BLOCK_TYPE,
+  NEWSLETTER_WEB_CSS,
   NO_EVENTS,
   eventKey,
   newsletterExcerpt,
@@ -146,6 +147,34 @@ describe("newsletter sanitizer", () => {
     expect(JSON.stringify(out)).not.toContain("colwidth");
   });
 
+  it("keeps a percentage column width and drops anything else", () => {
+    const withWidth = (widthPct: unknown) =>
+      doc({
+        type: "table",
+        content: [
+          {
+            type: "tableRow",
+            content: [{ type: "tableCell", attrs: { widthPct }, content: [para("x")] }],
+          },
+        ],
+      });
+    const cellOf = (d: NewsletterNode) => d.content![0]!.content![0]!.content![0]!;
+    // A valid percentage survives, rounded to one decimal place.
+    expect(cellOf(sanitizeNewsletterDoc(withWidth(33.333))!).attrs).toEqual({
+      colspan: 1,
+      rowspan: 1,
+      widthPct: 33.3,
+    });
+    // Out of range, non-numeric, or pixel-shaped values leave the column
+    // flexible rather than guessing.
+    for (const bad of [0, 0.4, 101, -20, "40", "40%", [40], Number.NaN, null]) {
+      expect(cellOf(sanitizeNewsletterDoc(withWidth(bad))!).attrs).toEqual({
+        colspan: 1,
+        rowspan: 1,
+      });
+    }
+  });
+
   it("keeps a known text size and drops anything else, keeping the text", () => {
     const sized = (attrs: Record<string, unknown>) =>
       doc({ type: "paragraph", content: [{ type: "text", text: "big news", marks: [{ type: "fontSize", attrs }] }] });
@@ -212,6 +241,62 @@ describe("newsletter renderer", () => {
     expect(web).toContain('class="nl-table"');
     expect(web).toContain('<th class="nl-th">');
     expect(web).toContain('<td colspan="2" class="nl-td">');
+  });
+
+  it("emits percentage column widths the same way for email, web and print", () => {
+    const row = (type: "tableHeader" | "tableCell"): NewsletterNode => ({
+      type: "tableRow",
+      content: [
+        { type, attrs: { widthPct: 70 }, content: [para("What")] },
+        { type, attrs: { widthPct: 30 }, content: [para("When")] },
+      ],
+    });
+    const table: NewsletterNode = { type: "table", content: [row("tableHeader"), row("tableCell")] };
+
+    const email = renderNewsletterBodyHtml(doc(table), NO_EVENTS, { mode: "email" });
+    // Fixed layout is what makes a percentage bind; the width rides as both the
+    // attribute (Outlook's Word engine) and the inline style.
+    expect(email).toContain("table-layout:fixed");
+    expect(email).toMatch(/<th width="70%" style="[^"]*;width:70%"/);
+    expect(email).toMatch(/<td width="30%" style="[^"]*;width:30%"/);
+
+    const web = renderNewsletterBodyHtml(doc(table), NO_EVENTS, { mode: "web" });
+    expect(web).toContain('class="nl-table nl-table-fixed"');
+    expect(web).toContain('<th width="70%" class="nl-th">');
+    expect(web).toContain('<td width="30%" class="nl-td">');
+    // Print is the same markup under NEWSLETTER_WEB_CSS's print block, so the
+    // fixed-layout class existing in that stylesheet is what carries widths to
+    // paper.
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-table-fixed{table-layout:fixed}");
+
+    // A widthless table keeps auto layout — fixed would force equal columns
+    // the author never asked for.
+    const plain: NewsletterNode = {
+      type: "table",
+      content: [{ type: "tableRow", content: [{ type: "tableCell", content: [para("x")] }] }],
+    };
+    const plainWeb = renderNewsletterBodyHtml(doc(plain), NO_EVENTS, { mode: "web" });
+    expect(plainWeb).not.toContain("nl-table-fixed");
+    expect(plainWeb).not.toMatch(/<t[dh][^>]*width=/);
+  });
+
+  it("re-checks widths at render, so an unsanitized width is never emitted", () => {
+    const table: NewsletterNode = {
+      type: "table",
+      content: [
+        {
+          type: "tableRow",
+          content: [
+            { type: "tableCell", attrs: { widthPct: 500 }, content: [para("a")] },
+            { type: "tableCell", attrs: { widthPct: "60%" }, content: [para("b")] },
+          ],
+        },
+      ],
+    };
+    const email = renderNewsletterBodyHtml(doc(table), NO_EVENTS, { mode: "email" });
+    expect(email).not.toContain('width="500%"');
+    expect(email).not.toContain('width="60%"');
+    expect(email).not.toContain("table-layout:fixed");
   });
 
   it("never emits table markup for a row or cell outside a table", () => {
