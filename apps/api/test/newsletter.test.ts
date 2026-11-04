@@ -193,6 +193,23 @@ describe("newsletter sanitizer", () => {
     }
   });
 
+  it("keeps an image caption, trimmed, and drops anything else", () => {
+    const img = (caption: unknown) =>
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", caption } });
+    expect(sanitizeNewsletterDoc(img("  Ms. Reyes with the Gr 2 readers  "))!.content![0]!.attrs).toEqual({
+      src: "https://cdn.test/a.png",
+      alt: "",
+      caption: "Ms. Reyes with the Gr 2 readers",
+    });
+    // Blank or non-text leaves the image exactly as it was — no caption key.
+    for (const bad of ["", "   ", 3, true, null, ["x"]]) {
+      expect(sanitizeNewsletterDoc(img(bad))!.content![0]!.attrs).toEqual({
+        src: "https://cdn.test/a.png",
+        alt: "",
+      });
+    }
+  });
+
   it("keeps a known text size and drops anything else, keeping the text", () => {
     const sized = (attrs: Record<string, unknown>) =>
       doc({ type: "paragraph", content: [{ type: "text", text: "big news", marks: [{ type: "fontSize", attrs }] }] });
@@ -354,6 +371,82 @@ describe("newsletter renderer", () => {
     expect(plain).toContain('class="nl-img"');
     expect(plain).not.toContain("nl-img-left");
     expect(plain).not.toContain("align=");
+  });
+
+  it("renders a caption under the image — email, web and the text part alike", () => {
+    const img: NewsletterNode = {
+      type: "image",
+      attrs: { src: "https://cdn.test/a.png", alt: "", caption: "Left to right: Dana & Milo" },
+    };
+    const email = renderNewsletterBodyHtml(doc(img), NO_EVENTS, { mode: "email" });
+    // The image hands its bottom margin to the caption line, so the pair reads
+    // as one block — and the caption is escaped like any other text.
+    expect(email).toContain("margin:0 0 6px");
+    expect(email).toContain("Left to right: Dana &amp; Milo");
+
+    const web = renderNewsletterBodyHtml(doc(img), NO_EVENTS, { mode: "web" });
+    expect(web).toContain('class="nl-img nl-img-captioned"');
+    expect(web).toContain('<p class="nl-img-caption">Left to right: Dana &amp; Milo</p>');
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-img-captioned{margin:0 0 6px}");
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-img-caption{");
+
+    // The picture can't survive into the email's text part, but the caption is
+    // prose — often the names of who is in the photo — and does.
+    expect(renderNewsletterText(doc(img), NO_EVENTS)).toContain("Left to right: Dana & Milo");
+  });
+
+  it("floats a captioned image as one block, the caption riding along", () => {
+    const img: NewsletterNode = {
+      type: "image",
+      attrs: { src: "https://cdn.test/a.png", alt: "", float: "left", caption: "Coach Lee" },
+    };
+    const email = renderNewsletterBodyHtml(doc(img, para("wraps")), NO_EVENTS, { mode: "email" });
+    // The pair rides a one-cell layout table — the one float wrapper Outlook's
+    // Word engine honours — carrying the bare floated image's geometry.
+    expect(email).toContain('<table role="presentation"');
+    expect(email).toContain('align="left"');
+    expect(email).toContain("float:left");
+    expect(email).toContain("max-width:48%");
+    expect(email).toContain('width="288"');
+    expect(email).toContain("Coach Lee");
+    expect(email).not.toContain("class=");
+
+    const web = renderNewsletterBodyHtml(doc(img, para("wraps")), NO_EVENTS, { mode: "web" });
+    expect(web).toContain('class="nl-fig nl-fig-left"');
+    expect(web).toContain('class="nl-img-caption"');
+    expect(web).not.toContain("style=");
+    // One stylesheet serves screen and print, so the classes existing there is
+    // what carries the wrapped pair to paper.
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-fig-left{float:left");
+    expect(NEWSLETTER_WEB_CSS).toContain(".nl-fig-right{float:right");
+
+    // A captionless image — floated or not — keeps its old markup exactly: no
+    // wrapper table, no caption line.
+    const bare = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", float: "left" } }),
+      NO_EVENTS,
+      { mode: "email" },
+    );
+    expect(bare).not.toContain("<table");
+    expect(bare).not.toContain("nl-img-caption");
+  });
+
+  it("re-checks the caption at render, so an unsanitized value is never trusted", () => {
+    const html = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", caption: "<script>x</script>" } }),
+      NO_EVENTS,
+      { mode: "email" },
+    );
+    expect(html).not.toContain("<script");
+    expect(html).toContain("&lt;script&gt;");
+    // A non-string caption renders the plain image, never a stray caption block.
+    const none = renderNewsletterBodyHtml(
+      doc({ type: "image", attrs: { src: "https://cdn.test/a.png", caption: 7 } }),
+      NO_EVENTS,
+      { mode: "web" },
+    );
+    expect(none).toContain('class="nl-img"');
+    expect(none).not.toContain("nl-img-caption");
   });
 
   it("re-checks the float at render, so an unsanitized value is never emitted", () => {

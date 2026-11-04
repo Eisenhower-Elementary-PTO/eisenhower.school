@@ -223,6 +223,16 @@ function imageFloat(raw: unknown): "left" | "right" | null {
 const IMAGE_FLOAT_MAX = "48%";
 const IMAGE_FLOAT_EMAIL_PX = 288;
 
+/** An image's caption — the line under the picture that says who is in it.
+ *  Plain text, never markup: it is escaped like any other text at render, so
+ *  unlike float and the font sizes it needs no enumeration — but it is still
+ *  trimmed on write AND re-derived at render, the same both-ends habit. */
+function imageCaption(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const caption = raw.trim();
+  return caption ? caption : null;
+}
+
 function sanitizeMarks(raw: unknown): NewsletterNode["marks"] {
   if (!Array.isArray(raw)) return undefined;
   const out: NonNullable<NewsletterNode["marks"]> = [];
@@ -293,7 +303,11 @@ function sanitizeNode(raw: unknown, path: string): NewsletterNode | NewsletterNo
       if (!src) return null;
       const alt = typeof attrs.alt === "string" ? attrs.alt : "";
       const float = imageFloat(attrs.float);
-      return { type, attrs: { src, alt, ...(float ? { float } : {}) } };
+      const caption = imageCaption(attrs.caption);
+      return {
+        type,
+        attrs: { src, alt, ...(float ? { float } : {}), ...(caption ? { caption } : {}) },
+      };
     }
     case EVENTS_BLOCK_TYPE: {
       const attrs = (node.attrs ?? {}) as Record<string, unknown>;
@@ -1048,12 +1062,26 @@ function renderNode(node: NewsletterNode, ctx: Ctx): string {
     case "hardBreak":
       return "<br />";
     case "image": {
-      const a = (node.attrs ?? {}) as { src?: string; alt?: string; float?: unknown };
+      const a = (node.attrs ?? {}) as {
+        src?: string;
+        alt?: string;
+        float?: unknown;
+        caption?: unknown;
+      };
       const src = safeImageSrc(a.src);
       if (!src) return "";
       const float = imageFloat(a.float);
+      const caption = imageCaption(a.caption);
       if (!float) {
-        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px")} />`;
+        if (!caption) {
+          return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 18px")} />`;
+        }
+        // A captioned image hands its bottom margin to the caption line, so the
+        // pair reads as one block and the next paragraph keeps its distance.
+        return (
+          `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img nl-img-captioned", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 6px")} />` +
+          `<p${attr(ctx, "nl-img-caption", `margin:0 0 18px;font-size:13.5px;line-height:1.5;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>`
+        );
       }
       // A floated image needs BOTH forms, because the two email worlds split:
       // Outlook's Word engine floats on the align attribute (and hspace/vspace
@@ -1065,8 +1093,23 @@ function renderNode(node: NewsletterNode, ctx: Ctx): string {
       // gets a wrapped column. The web page's classes carry the same geometry
       // in NEWSLETTER_WEB_CSS, print included.
       const margin = float === "left" ? "4px 18px 10px 0" : "4px 0 10px 18px";
-      const style = `float:${float};width:${IMAGE_FLOAT_EMAIL_PX}px;max-width:${IMAGE_FLOAT_MAX};height:auto;border-radius:8px;margin:${margin}`;
-      return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}" align="${float}" hspace="12" vspace="4" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, `nl-img nl-img-${float}`, style)} />`;
+      if (!caption) {
+        const style = `float:${float};width:${IMAGE_FLOAT_EMAIL_PX}px;max-width:${IMAGE_FLOAT_MAX};height:auto;border-radius:8px;margin:${margin}`;
+        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}" align="${float}" hspace="12" vspace="4" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, `nl-img nl-img-${float}`, style)} />`;
+      }
+      // A floated caption can't be a sibling paragraph — nothing would keep it
+      // under its picture — so the pair rides a one-cell layout table, the one
+      // float wrapper every mail engine has: Outlook's Word engine floats the
+      // table on its align attribute (with a snug wrap — it ignores the margin,
+      // a known and accepted cost of captioning a float there), everything with
+      // CSS floats on the style, same geometry as the bare floated image.
+      const tableStyle = `float:${float};width:${IMAGE_FLOAT_EMAIL_PX}px;max-width:${IMAGE_FLOAT_MAX};border-collapse:collapse;margin:${margin}`;
+      return (
+        `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${float}" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, `nl-fig nl-fig-${float}`, tableStyle)}><tr><td${attr(ctx, "nl-fig-td", "padding:0")}>` +
+        `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, "nl-fig-img", "display:block;width:100%;height:auto;border-radius:8px")} />` +
+        `<p${attr(ctx, "nl-img-caption", `margin:6px 0 0;font-size:13px;line-height:1.5;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>` +
+        `</td></tr></table>`
+      );
     }
     case "table":
       return renderTable(node, ctx);
@@ -1075,8 +1118,9 @@ function renderNode(node: NewsletterNode, ctx: Ctx): string {
     default:
       // Unreachable for sanitized input; render children rather than vanish.
       // Among what lands here: a tableRow or tableCell that somehow isn't
-      // inside a table — renderTable is the only emitter of <tr>/<td>/<th>, so
-      // out of place they render as their text, never as stray table markup.
+      // inside a table — author rows and cells are emitted only by renderTable
+      // (the captioned-float wrapper above builds its own one-cell table whole),
+      // so out of place they render as their text, never as stray table markup.
       return renderChildren(node.content, ctx);
   }
 }
@@ -1246,8 +1290,13 @@ export function renderNewsletterText(
         if (lines.length > 0) out.push(lines.join("\n"));
         break;
       }
-      case "image":
+      case "image": {
+        // The picture itself can't survive into plain text, but its caption is
+        // prose — often the names of who is in the photo — and is kept.
+        const caption = imageCaption(n.attrs?.caption);
+        if (caption) out.push(caption);
         break;
+      }
       case EVENTS_BLOCK_TYPE: {
         const attrs = eventsAttrs(n);
         if (attrs.heading) out.push(attrs.heading.toUpperCase());
@@ -1679,7 +1728,9 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-p,.nl-ul,.nl-ol{font-size:12pt;line-height:1.55}
   /* Don't strand a heading or an event row at the foot of a page. */
   .nl-h1,.nl-h2,.nl-h3,.nl-events-heading{break-after:avoid;page-break-after:avoid}
-  .nl-event,.nl-li,.nl-img,.nl-quote,.nl-table tr{break-inside:avoid;page-break-inside:avoid}
+  .nl-event,.nl-li,.nl-img,.nl-quote,.nl-fig,.nl-table tr{break-inside:avoid;page-break-inside:avoid}
+  /* A caption must not strand on the next page without its picture. */
+  .nl-img-captioned{break-after:avoid;page-break-after:avoid}
   /* Nothing on paper is clickable, so an accent-coloured title is just noise. */
   .nl-event-title-link{color:${INK}}
   /* The whole footer stays off paper — the admin's footer HTML, its link
@@ -1744,6 +1795,18 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
    geometry matches the email's inline form (renderNode's image case). */
 .nl-img-left{float:left;max-width:48%;margin:4px 18px 10px 0}
 .nl-img-right{float:right;max-width:48%;margin:4px 0 10px 18px}
+/* A captioned image hands its bottom margin to the caption line, so the pair
+   reads as one block (renderNode's image case). */
+.nl-img-captioned{margin:0 0 6px}
+.nl-img-caption{margin:0 0 18px;font-size:13.5px;line-height:1.5;color:${MUTED}}
+/* A captioned FLOATED image rides a one-cell layout table (the email's float
+   wrapper); the wrapper carries the bare floated image's geometry. */
+.nl-fig{border-collapse:collapse}
+.nl-fig-left{float:left;width:288px;max-width:48%;margin:4px 18px 10px 0}
+.nl-fig-right{float:right;width:288px;max-width:48%;margin:4px 0 10px 18px}
+.nl-fig-td{padding:0}
+.nl-fig-img{display:block;width:100%;height:auto;border-radius:8px}
+.nl-fig .nl-img-caption{margin:6px 0 0;font-size:13px}
 .nl-table{width:100%;border-collapse:collapse;margin:0 0 16px}
 /* Authored column widths (the cells' width="NN%" attributes) only bind under
    fixed layout; the class applies on screen and in print alike. */

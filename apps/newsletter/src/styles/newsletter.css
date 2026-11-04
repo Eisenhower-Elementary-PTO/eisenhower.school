@@ -114,9 +114,18 @@
   margin: 22px 0;
 }
 .nlx-editor .ProseMirror img { max-width: 100%; height: auto; border-radius: 8px; }
-/* Floated images carry their geometry inline (imageFloat.ts), mirroring the
-   rendered issue; this only keeps a trailing float from spilling out of the
-   editing surface. */
+/* The composer's image node view (ImageView.tsx): the figure wrapper carries
+   the float geometry — the margins and 48% cap match the renderer's — and the
+   caption sits under the picture as it will in the issue. The bare-img rules
+   around here still serve the footer editor, whose images have no node view. */
+.nlx-editor .ProseMirror figure.nlx-img { margin: 0 0 18px; }
+.nlx-editor .ProseMirror .nlx-img img { display: block; }
+.nlx-editor .ProseMirror .nlx-img-left { float: left; max-width: 48%; margin: 4px 18px 10px 0; }
+.nlx-editor .ProseMirror .nlx-img-right { float: right; max-width: 48%; margin: 4px 0 10px 18px; }
+.nlx-editor .ProseMirror .nlx-img-caption { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+/* With a node view, the selection class lands on the wrapper, not the img. */
+.nlx-editor .ProseMirror .nlx-img.ProseMirror-selectednode img { outline: 3px solid var(--blue); outline-offset: 2px; }
+/* A trailing float must not spill out of the editing surface. */
 .nlx-editor .ProseMirror::after { content: ""; display: block; clear: both; }
 /* Tables, mirroring the renderer's .nl-table look so the draft reads like the
    issue — except the cell borders, which the render deliberately omits (email,

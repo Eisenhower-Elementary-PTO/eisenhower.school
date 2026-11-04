@@ -21,7 +21,7 @@ import { EditorContent, useEditor, type Editor as TipTapEditor } from "@tiptap/r
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { LINK_SHORTCUT_LABEL, LinkShortcut, linkSelection } from "./linking.js";
-import { FloatImage, imageFloatOf, setImageFloat } from "./imageFloat.js";
+import { FloatImage, captionImage, imageCaptionOf, imageFloatOf, setImageFloat } from "./imageFloat.js";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -116,6 +116,7 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
           pos: sel.from,
           src: String(sel.node.attrs.src ?? ""),
           float: imageFloatOf(sel.node.attrs.float),
+          caption: imageCaptionOf(sel.node.attrs.caption),
         }
       : null;
   const canEditSelected = !!selectedImage?.src && typeOfUrl(selectedImage.src) !== "image/gif";
@@ -202,6 +203,8 @@ function Toolbar({ editor }: { editor: TipTapEditor }) {
             onClick={() => setImageFloat(editor, selectedImage.float === "left" ? null : "left")} />
           <ToolButton label="Float right" active={selectedImage.float === "right"}
             onClick={() => setImageFloat(editor, selectedImage.float === "right" ? null : "right")} />
+          <ToolButton label="Caption" active={!!selectedImage.caption}
+            onClick={() => captionImage(editor)} />
         </>
       )}
       <ToolButton icon="table" label="Table"
