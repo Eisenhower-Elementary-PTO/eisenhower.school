@@ -15,14 +15,14 @@
   },
   "dependencies": {
     "@sd/shared": "workspace:*",
-    "hono": "^4.6.14",
+    "hono": "^4.13.11",
     "ical.js": "^2.2.1",
     "postal-mime": "^4.1.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
+    "vitest": "^5.1.0",
     "wrangler": "^4.129.0"
   }
 }
