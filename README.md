@@ -320,4 +320,6 @@ of what it would be allowed to touch.
 
 ## License
 
-MIT
+GNU Affero General Public License v3.0 or later — see [LICENSE](LICENSE).
+
+Copyright (c) 2026 Jeffery Bennett.
