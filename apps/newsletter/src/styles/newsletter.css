@@ -120,8 +120,11 @@
    around here still serve the footer editor, whose images have no node view. */
 .nlx-editor .ProseMirror figure.nlx-img { margin: 0 0 18px; }
 .nlx-editor .ProseMirror .nlx-img img { display: block; }
-.nlx-editor .ProseMirror .nlx-img-left { float: left; max-width: 48%; margin: 4px 18px 10px 0; }
-.nlx-editor .ProseMirror .nlx-img-right { float: right; max-width: 48%; margin: 4px 0 10px 18px; }
+/* The `figure` tag must stay in these selectors: the base rule above is
+   (0,3,1) and a bare `.nlx-img-left` is (0,3,0), so without it the base
+   margin wins and the wrapped text sits flush against the picture. */
+.nlx-editor .ProseMirror figure.nlx-img.nlx-img-left { float: left; max-width: 48%; margin: 4px 18px 10px 0; }
+.nlx-editor .ProseMirror figure.nlx-img.nlx-img-right { float: right; max-width: 48%; margin: 4px 0 10px 18px; }
 .nlx-editor .ProseMirror .nlx-img-caption { margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: var(--ink-3); }
 /* With a node view, the selection class lands on the wrapper, not the img. */
 .nlx-editor .ProseMirror .nlx-img.ProseMirror-selectednode img { outline: 3px solid var(--blue); outline-offset: 2px; }
