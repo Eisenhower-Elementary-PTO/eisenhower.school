@@ -55,6 +55,12 @@
   top: 0;
   z-index: 2;
 }
+/* On desktop the DOCUMENT scrolls (no .sd-scroll) and .sd-deskhead is itself
+   sticky at the viewport top with z-index 10, so top: 0 parks the toolbar
+   underneath it. 71px is the deskhead's rendered height: 13px padding ×2 +
+   the 44px account switcher (32px avatar + 5px padding ×2 + 1px border ×2)
+   + its 1px border-bottom. */
+.sd-desktop .nlx-toolbar { top: 71px; }
 .nlx-tool {
   min-width: 30px;
   height: 30px;
