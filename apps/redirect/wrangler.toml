@@ -26,3 +26,8 @@ custom_domain = true
 [[env.production.routes]]
 pattern = "drive.eisenhower.school"
 custom_domain = true
+
+# Vanity host for the school's Slack workspace.
+[[env.production.routes]]
+pattern = "slack.eisenhower.school"
+custom_domain = true
