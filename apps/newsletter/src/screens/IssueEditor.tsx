@@ -498,7 +498,10 @@ export function IssueEditor() {
         subtitle: draft.subtitle.trim() ? draft.subtitle : null,
         doc,
         resolveEvents: (attrs) => events[attrs.blockId] ?? [],
-        dateLabel: formatIssueDate(issue.sentAt ?? issue.publishedAt ?? issue.editedAt),
+        // Matches IssuePrint.tsx, so the measured page is the printed page:
+        // a date line only once the issue is published, never "Last edited".
+        dateLabel:
+          issue.publishedAt !== null ? formatIssueDate(issue.sentAt ?? issue.publishedAt) : "",
         // Mirrors IssuePrint.tsx: no banner, no language bar, no archive or
         // print links — and the QR block, which takes real space on paper.
         isDraft: false,

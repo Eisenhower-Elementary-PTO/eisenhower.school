@@ -122,7 +122,7 @@
 .nlx-editor .ProseMirror .nlx-img img { display: block; }
 .nlx-editor .ProseMirror .nlx-img-left { float: left; max-width: 48%; margin: 4px 18px 10px 0; }
 .nlx-editor .ProseMirror .nlx-img-right { float: right; max-width: 48%; margin: 4px 0 10px 18px; }
-.nlx-editor .ProseMirror .nlx-img-caption { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+.nlx-editor .ProseMirror .nlx-img-caption { margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: var(--ink-3); }
 /* With a node view, the selection class lands on the wrapper, not the img. */
 .nlx-editor .ProseMirror .nlx-img.ProseMirror-selectednode img { outline: 3px solid var(--blue); outline-offset: 2px; }
 /* A trailing float must not spill out of the editing surface. */

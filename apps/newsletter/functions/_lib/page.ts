@@ -258,10 +258,10 @@ export async function renderIssuePage(
     subtitle: issue.subtitle,
     doc: issue.content,
     resolveEvents: (attrs) => issue.eventsSnapshot[attrs.blockId] ?? [],
+    // "" for an unpublished issue: no "Last edited" bookkeeping on a page
+    // whose point is showing a reviewer the issue as readers will get it.
     dateLabel:
-      issue.publishedAt !== null
-        ? formatIssueDate(issue.sentAt ?? issue.publishedAt)
-        : `Last edited ${formatIssueDate(issue.updatedAt)}`,
+      issue.publishedAt !== null ? formatIssueDate(issue.sentAt ?? issue.publishedAt) : "",
     isDraft,
     archiveHref: opts.archiveHref,
     printHref: opts.printHref,

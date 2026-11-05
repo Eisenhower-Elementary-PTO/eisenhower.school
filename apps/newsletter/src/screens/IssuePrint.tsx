@@ -118,10 +118,9 @@ function build(
     subtitle: issue.subtitle,
     doc: issue.content,
     resolveEvents: (attrs) => events[attrs.blockId] ?? [],
+    // "" for an unpublished issue: no "Last edited" bookkeeping on the page.
     dateLabel:
-      issue.publishedAt !== null
-        ? formatIssueDate(issue.sentAt ?? issue.publishedAt)
-        : `Last edited ${formatIssueDate(issue.editedAt)}`,
+      issue.publishedAt !== null ? formatIssueDate(issue.sentAt ?? issue.publishedAt) : "",
     // Never the draft banner here, sent or not. It exists to warn a REVIEWER
     // holding a link (and says "private preview link", which this isn't); the
     // admin printing this knows what they're printing, and the banner would

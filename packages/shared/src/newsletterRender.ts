@@ -1162,7 +1162,7 @@ function renderVisibleNode(node: NewsletterNode, ctx: Ctx): string {
         // pair reads as one block and the next paragraph keeps its distance.
         return (
           `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}"${attr(ctx, "nl-img nl-img-captioned", "display:block;max-width:100%;height:auto;border-radius:8px;margin:0 0 6px")} />` +
-          `<p${attr(ctx, "nl-img-caption", `margin:0 0 18px;font-size:13.5px;line-height:1.5;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>`
+          `<p${attr(ctx, "nl-img-caption", `margin:0 0 18px;font-size:12px;line-height:1.4;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>`
         );
       }
       // A floated image needs BOTH forms, because the two email worlds split:
@@ -1189,7 +1189,7 @@ function renderVisibleNode(node: NewsletterNode, ctx: Ctx): string {
       return (
         `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${float}" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, `nl-fig nl-fig-${float}`, tableStyle)}><tr><td${attr(ctx, "nl-fig-td", "padding:0")}>` +
         `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.alt ?? "")}" width="${IMAGE_FLOAT_EMAIL_PX}"${attr(ctx, "nl-fig-img", "display:block;width:100%;height:auto;border-radius:8px")} />` +
-        `<p${attr(ctx, "nl-img-caption", `margin:6px 0 0;font-size:13px;line-height:1.5;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>` +
+        `<p${attr(ctx, "nl-img-caption", `margin:4px 0 0;font-size:12px;line-height:1.35;color:${MUTED};font-family:${FONT}`)}>${inlineText(ctx, caption)}</p>` +
         `</td></tr></table>`
       );
     }
@@ -1615,8 +1615,10 @@ export function formatIssueDate(iso: string): string {
 }
 
 export interface NewsletterIssuePageInput extends NewsletterWrapperInput {
-  /** Already formatted by the caller — usually `formatIssueDate(sentAt)`, or a
-   *  "last edited …" line for an issue that hasn't gone out. */
+  /** Already formatted by the caller — usually `formatIssueDate(sentAt)` —
+   *  or "" to omit the line. Unpublished issues pass "": the page used to say
+   *  "Last edited …" there, which read as bookkeeping on a page meant to show
+   *  the issue as readers will get it (asked off, 2026-11-04). */
   dateLabel: string;
   /** Draws the "not published yet" banner. Drives nothing else: an unpublished
    *  issue and a published one render identically otherwise, which is the
@@ -1747,7 +1749,7 @@ export function renderNewsletterIssuePageHtml(input: NewsletterIssuePageInput): 
         ${qrBlock}
         <h1 class="nl-title">${hideEmojiOnPaper(escapeHtml(input.title))}</h1>
         ${input.subtitle ? `<p class="nl-subtitle">${hideEmojiOnPaper(escapeHtml(input.subtitle))}</p>` : ""}
-        <p class="nl-date">${escapeHtml(input.dateLabel)}</p>
+        ${input.dateLabel ? `<p class="nl-date">${escapeHtml(input.dateLabel)}</p>` : ""}
         <div class="nl-body${body.includes('class="nl-qr-col"') ? " nl-body-rail" : ""}">
 ${body}
         </div>
@@ -1892,7 +1894,10 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 /* A captioned image hands its bottom margin to the caption line, so the pair
    reads as one block (renderNode's image case). */
 .nl-img-captioned{margin:0 0 6px}
-.nl-img-caption{margin:0 0 18px;font-size:13.5px;line-height:1.5;color:${MUTED}}
+/* Small and tight on purpose: a caption is a label, not a paragraph, and on
+   a FLOATED figure every extra line of caption extends the float, keeping the
+   body text narrowed beside it that much longer. */
+.nl-img-caption{margin:0 0 18px;font-size:12px;line-height:1.4;color:${MUTED}}
 /* A captioned FLOATED image rides a one-cell layout table (the email's float
    wrapper); the wrapper carries the bare floated image's geometry. */
 .nl-fig{border-collapse:collapse}
@@ -1900,7 +1905,7 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-fig-right{float:right;width:288px;max-width:48%;margin:4px 0 10px 18px}
 .nl-fig-td{padding:0}
 .nl-fig-img{display:block;width:100%;height:auto;border-radius:8px}
-.nl-fig .nl-img-caption{margin:6px 0 0;font-size:13px}
+.nl-fig .nl-img-caption{margin:4px 0 0;font-size:12px;line-height:1.35}
 /* Per-block visibility wrappers (renderNode). display:contents so the wrapper
    contributes no box on screen either — a marked image floats and a marked
    heading spaces exactly as an unmarked one. A print-only block exists for
