@@ -209,3 +209,54 @@ jobs:
         run: pnpm build
       - name: Deploy
         run: pnpm exec wrangler pages deploy ${{ matrix.deploy }} --branch main
+
+  # One Slack message per deploy, success or failure. This is CI posting about
+  # a public event (a commit on a public repo shipping), so it is outside the
+  # API's slackLinesOf seam — nothing here can hold member data. The webhook
+  # lives in the SLACK_WEBHOOK_URL *Actions* secret (same value as the
+  # Worker's secret is fine, it's just stored twice); absent means off, like
+  # every optional channel in this repo — the job succeeds and says so, so a
+  # fork or fresh setup never fails its deploy over a missing webhook.
+  # Runs under `always()` because a FAILED deploy is the message worth having;
+  # it still skips when the Cloudflare secrets were absent (nothing shipped,
+  # nothing to say). The commit message crosses only via `env` — interpolating
+  # ${{ }} into `run` would let a crafted commit message inject shell.
+  notify:
+    needs: [workers, pages]
+    if: always() && needs.workers.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WORKERS_RESULT: ${{ needs.workers.result }}
+          PAGES_RESULT: ${{ needs.pages.result }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured — skipping deploy notification."
+            exit 0
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          # workflow_dispatch has no head_commit; fall back to the sha alone.
+          SUBJECT="$(printf '%s' "$COMMIT_MESSAGE" | head -n 1)"
+
+          if [ "$WORKERS_RESULT" = "success" ] && [ "$PAGES_RESULT" = "success" ]; then
+            TEXT=":rocket: Deployed \`$SHORT_SHA\`"
+          elif [ "$WORKERS_RESULT" != "success" ]; then
+            TEXT=":x: Deploy FAILED at the workers stage (\`$SHORT_SHA\`) — migrations may have applied; front ends did not ship"
+          else
+            TEXT=":warning: Deploy of \`$SHORT_SHA\` shipped the Workers but one or more Pages apps FAILED"
+          fi
+          if [ -n "$SUBJECT" ]; then
+            TEXT="$TEXT — $SUBJECT"
+          fi
+          TEXT="$TEXT (by $ACTOR). <$RUN_URL|Run log>"
+
+          jq -n --arg text "$TEXT" '{text: $text}' \
+            | curl -sS --fail-with-body -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" \
+            || echo "Slack notification failed — deploy itself is unaffected."
