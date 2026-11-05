@@ -19,6 +19,13 @@ export function ImageView({ node }: NodeViewProps) {
     <NodeViewWrapper
       as="figure"
       className={`nlx-img${float ? ` nlx-img-${float}` : ""}`}
+      // Restated by hand for the editor's print-visibility badge styles — a
+      // node view renders its own DOM, so the PrintVisibility extension's
+      // renderHTML attribute never reaches this wrapper (EventsBlockView's
+      // reasoning; a photo is the mark's most likely carrier of all).
+      data-print-visibility={
+        typeof node.attrs.printVisibility === "string" ? node.attrs.printVisibility : undefined
+      }
       // Dragging grips the picture (data-drag-handle below), never the caption.
     >
       <img src={String(node.attrs.src ?? "")} alt={String(node.attrs.alt ?? "")} data-drag-handle />

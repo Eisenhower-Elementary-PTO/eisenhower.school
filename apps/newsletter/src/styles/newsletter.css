@@ -183,9 +183,9 @@
 /* Blocks the author scoped with the print-visibility picker (PrintVisibility
    extension → data-print-visibility). A dashed edge plus a badge, because the
    draft otherwise looks identical either way — that invisibility is the whole
-   feature, and also why it needs a loud marker here. The badge rides ::before,
-   which an <img> can't carry; a marked image still gets the dashed edge, and
-   the toolbar picker names its state while it's selected. */
+   feature, and also why it needs a loud marker here. Node views (the image's
+   figure, the events block) restate the attribute on their wrappers by hand,
+   since the extension's renderHTML never reaches a React node view's DOM. */
 .nlx-editor .ProseMirror [data-print-visibility] {
   outline: 1px dashed var(--line-2, var(--line));
   outline-offset: 6px;
