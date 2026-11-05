@@ -129,6 +129,9 @@ export interface Strings {
   signInToVolunteer: string;
   volunteerWithdraw: string;
   volunteerWhoFor: string;
+  /** Chip on a person in the claim picker who already holds this position —
+   *  one signup per Person per position; the rest of the family may still go. */
+  volunteerPersonSignedUp: string;
   volunteerNote: string;
   volunteerNeedPerson: string;
   volunteerNotePlaceholder: string;
@@ -1062,6 +1065,7 @@ const en: Strings = {
   signInToVolunteer: "Sign in to volunteer",
   volunteerWithdraw: "Give up spot",
   volunteerWhoFor: "Who is signing up?",
+  volunteerPersonSignedUp: "Already signed up",
   volunteerNote: "Note (optional)",
   volunteerNeedPerson:
     "Add yourself or a family member first, then you can sign them up for a spot.",
@@ -1954,6 +1958,7 @@ const es: Strings = {
   signInToVolunteer: "Inicia sesión para ser voluntario",
   volunteerWithdraw: "Ceder mi lugar",
   volunteerWhoFor: "¿Quién se apunta?",
+  volunteerPersonSignedUp: "Ya en la lista",
   volunteerNote: "Nota (opcional)",
   volunteerNeedPerson:
     "Agrégate a ti o a un familiar primero y luego podrás apuntarlo a un puesto.",
@@ -2773,6 +2778,7 @@ const zh: Strings = {
   signInToVolunteer: "登录后即可报名",
   volunteerWithdraw: "取消报名",
   volunteerWhoFor: "为谁报名？",
+  volunteerPersonSignedUp: "已报名",
   volunteerNote: "备注（可选）",
   volunteerNeedPerson: "请先添加您本人或一位家庭成员，然后即可为其报名。",
   volunteerNotePlaceholder: "有什么需要组织者知道的",
@@ -3562,6 +3568,7 @@ const so: Strings = {
   signInToVolunteer: "Gal si aad u mutadawacdo",
   volunteerWithdraw: "Booska ka noqo",
   volunteerWhoFor: "Yaa is-diiwaangelinaya?",
+  volunteerPersonSignedUp: "Horey u diiwaangashan",
   volunteerNote: "Xusuus-qor (ikhtiyaari)",
   volunteerNeedPerson:
     "Marka hore ku dar naftaada ama xubin qoyska ka mid ah, ka dibna waad u diiwaan gelin kartaa meel.",

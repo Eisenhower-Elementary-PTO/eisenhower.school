@@ -108,6 +108,7 @@ function PositionCard({
   position,
   locale,
   canWrite,
+  persons,
   busy,
   onTake,
   onWithdraw,
@@ -118,6 +119,8 @@ function PositionCard({
   locale: string;
   /** False when signed out, or when the sheet is closed. */
   canWrite: boolean;
+  /** The Persons the reader controls — the pool a claim picks from. */
+  persons: ControllablePersonDTO[];
   busy: boolean;
   onTake: () => void;
   onWithdraw: (signupId: string) => void;
@@ -127,7 +130,14 @@ function PositionCard({
   const { t } = useI18n();
   const signups = signupsOf(position);
   const full = position.filled >= position.slots;
-  const mine = signups.find((s) => s.isYou);
+  // All of the household's claims, not just the first: one signup per Person
+  // per position, and a parent may hold spots for themselves AND their kids.
+  const mySignups = signups.filter((s) => s.isYou);
+  const signedPersonIds = new Set(mySignups.map((s) => s.personId));
+  // An empty persons list still offers the button: ClaimSheet turns it into
+  // the "add a family member first" prompt.
+  const canTakeAnother =
+    persons.length === 0 || persons.some((p) => !signedPersonIds.has(p.id));
   const shift = shiftLabel(position.startsAt, position.endsAt, locale);
 
   return (
@@ -181,15 +191,19 @@ function PositionCard({
 
       {/* Offered for as long as the spot is theirs, not only in the moment after
           taking it — the confirmation that follows a claim is easy to dismiss,
-          and a closed sheet is still a shift they owe. */}
-      {mine && (
-        <Btn block kind="secondary" icon="calendar" onClick={() => onAddToCalendar(mine.id)}>
-          {t("volunteerAddToCalendar")}
+          and a closed sheet is still a shift they owe. One button per claim:
+          each signup is its own .ics, so a parent holding two spots can put
+          each person's shift on the right calendar. */}
+      {mySignups.map((s) => (
+        <Btn key={s.id} block kind="secondary" icon="calendar" onClick={() => onAddToCalendar(s.id)}>
+          {mySignups.length > 1
+            ? `${t("volunteerAddToCalendar")} (${s.displayName})`
+            : t("volunteerAddToCalendar")}
         </Btn>
-      )}
+      ))}
 
       {canWrite ? (
-        !mine && (
+        canTakeAnother && (
           <Btn block kind={full ? "secondary" : "primary"} icon="plus" disabled={busy || full} onClick={onTake}>
             {t("takeASpot")}
           </Btn>
@@ -208,19 +222,27 @@ function PositionCard({
  *  signs up a child by picking them, and nobody can sign up a stranger. */
 function ClaimSheet({
   persons,
+  takenPersonIds,
   busy,
   error,
   onClose,
   onSubmit,
 }: {
   persons: ControllablePersonDTO[];
+  /** Persons of the reader's who already hold this position. They stay visible
+   *  but can't be picked again — a second signup for the same Person is the one
+   *  combination the server refuses (409 duplicate); a DIFFERENT Person on the
+   *  same position is an ordinary claim. */
+  takenPersonIds: Set<string>;
   busy: boolean;
   error: string | null;
   onClose: () => void;
   onSubmit: (personId: string, note: string) => void;
 }) {
   const { t, locale } = useI18n();
-  const [personId, setPersonId] = useState(persons[0]?.id ?? "");
+  const [personId, setPersonId] = useState(
+    persons.find((p) => !takenPersonIds.has(p.id))?.id ?? "",
+  );
   const [note, setNote] = useState("");
 
   // A brand-new member controls no Persons yet, so there is nobody to sign up.
@@ -250,21 +272,25 @@ function ClaimSheet({
         <Field label={t("volunteerWhoFor")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {persons.map((p) => {
-              const on = p.id === personId;
+              const taken = takenPersonIds.has(p.id);
+              const on = !taken && p.id === personId;
               return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setPersonId(p.id)}
                   aria-pressed={on}
+                  disabled={taken}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", textAlign: "left",
                     border: `1px solid ${on ? "var(--blue)" : "var(--line)"}`, borderRadius: 10,
-                    background: on ? "var(--blue-50, #eef6fc)" : "var(--paper)", font: "inherit", cursor: "pointer",
+                    background: on ? "var(--blue-50, #eef6fc)" : "var(--paper)", font: "inherit",
+                    cursor: taken ? "default" : "pointer", opacity: taken ? 0.6 : 1,
                   }}
                 >
                   <Avatar name={p.displayName} img={p.photoUrl} size={30} />
                   <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{p.displayName}</span>
+                  {taken && <Tag tone="line" icon="check">{t("volunteerPersonSignedUp")}</Tag>}
                   {on && <Icon name="check" size={17} style={{ color: "var(--blue)" }} />}
                 </button>
               );
@@ -380,6 +406,17 @@ export function VolunteerPositions({
 
   const canWrite = !!me && !sheet.closed;
 
+  // Which of the reader's Persons already hold the position being claimed, so
+  // the picker greys them out instead of letting the server 409 the duplicate.
+  const claimingPosition = claiming ? sheet.positions.find((p) => p.id === claiming) : undefined;
+  const takenPersonIds = new Set(
+    claimingPosition
+      ? signupsOf(claimingPosition)
+          .filter((s) => s.isYou)
+          .map((s) => s.personId)
+      : [],
+  );
+
   const claim = async (positionId: string, personId: string, note: string) => {
     setBusy(true);
     setClaimError(null);
@@ -438,6 +475,7 @@ export function VolunteerPositions({
               position={p}
               locale={locale}
               canWrite={canWrite}
+              persons={me?.persons ?? []}
               busy={busy}
               onTake={() => { setClaimError(null); setClaiming(p.id); }}
               onWithdraw={withdraw}
@@ -454,6 +492,7 @@ export function VolunteerPositions({
       {claiming && (
         <ClaimSheet
           persons={me?.persons ?? []}
+          takenPersonIds={takenPersonIds}
           busy={busy}
           error={claimError}
           onClose={() => setClaiming(null)}
