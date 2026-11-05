@@ -35,6 +35,7 @@ import {
   slotsTextLength,
   slotsToPrompt,
   succinctPrompt,
+  suggestionsPrompt,
 } from "../src/lib/newsletterAssist.js";
 
 /** A draft in ALREADY-SANITIZED shape, so "untouched means byte-identical"
@@ -266,7 +267,28 @@ describe("assistSuccinct", () => {
   });
 });
 
+describe("suggestionsPrompt", () => {
+  it("carries the admins' standing guidance only when there is any, keeping the answer format last", () => {
+    expect(suggestionsPrompt()).not.toContain("standing editorial guidance");
+    expect(suggestionsPrompt("")).toBe(suggestionsPrompt());
+    expect(suggestionsPrompt("   ")).toBe(suggestionsPrompt());
+    const withGuidance = suggestionsPrompt("Always flag missing RSVP links.");
+    expect(withGuidance).toContain("Always flag missing RSVP links.");
+    // The output contract stays ours and stays last, whatever the guidance says.
+    expect(withGuidance.trimEnd().endsWith('{"suggestions":["<suggestion>", "..."]}')).toBe(true);
+    expect(suggestionsPrompt()).toContain('{"suggestions":');
+  });
+});
+
 describe("assistSuggestions", () => {
+  it("puts the guidance into the system prompt the model is actually run with", async () => {
+    const { env, calls } = fakeAi({ suggestions: ["ok"] });
+    await assistSuggestions(env, fixtureDoc(), "Always flag missing RSVP links.");
+    const messages = calls[0]!.input.messages as { role: string; content: string }[];
+    expect(messages[0]!.role).toBe("system");
+    expect(messages[0]!.content).toContain("Always flag missing RSVP links.");
+  });
+
   it("returns trimmed strings and nothing else, capped in count and length", async () => {
     const { env } = fakeAi({
       suggestions: [
@@ -376,6 +398,9 @@ function routeEnv(opts: {
   status?: string;
   doc?: NewsletterNode;
   budgetSpent?: number;
+  /** Stored newsletter settings blob (the `newsletter_settings` key), when a
+   *  test wants one to exist — absent, the route runs on the defaults. */
+  storedSettings?: unknown;
 }): Env {
   const budget = new Map<string, number>();
   return {
@@ -391,7 +416,11 @@ function routeEnv(opts: {
           },
           async first() {
             if (sql.includes("FROM setting")) {
-              return binds[0] === NEWSLETTER_EDITOR_GROUP_SETTING ? { value: GROUP } : null;
+              if (binds[0] === NEWSLETTER_EDITOR_GROUP_SETTING) return { value: GROUP };
+              if (binds[0] === "newsletter_settings" && opts.storedSettings !== undefined) {
+                return { value: JSON.stringify(opts.storedSettings) };
+              }
+              return null;
             }
             if (sql.includes("FROM grp")) return { id: GROUP, name: "Newsletter committee" };
             if (sql.includes("FROM membership m")) return { ok: 1 };
@@ -435,6 +464,31 @@ describe("POST /newsletter/issues/:id/assist", () => {
     const body = (await res.json()) as { result: { suggestions: string[]; content: unknown } };
     expect(body.result.suggestions).toEqual(["Lead with the date."]);
     expect(body.result.content).toBeNull();
+  });
+
+  it("rides the stored suggestions guidance into the model's system prompt", async () => {
+    const calls: { input: Record<string, unknown> }[] = [];
+    const ai = {
+      run: async (_model: string, input: unknown) => {
+        calls.push({ input: input as Record<string, unknown> });
+        return { response: JSON.stringify({ suggestions: ["ok"] }) };
+      },
+    };
+    const res = await routeApp(
+      routeEnv({ ai, storedSettings: { suggestionsGuidance: "We always lead with volunteer asks." } }),
+    ).post({ mode: "suggestions" });
+    expect(res.status).toBe(200);
+    const messages = calls[0]!.input.messages as { role: string; content: string }[];
+    expect(messages[0]!.content).toContain("We always lead with volunteer asks.");
+    // The succinct pass is untouched by it — the guidance speaks to the review,
+    // not to the rewrite.
+    calls.length = 0;
+    const res2 = await routeApp(
+      routeEnv({ ai, storedSettings: { suggestionsGuidance: "We always lead with volunteer asks." } }),
+    ).post({ mode: "succinct" });
+    expect(res2.status).toBe(200);
+    const messages2 = calls[0]!.input.messages as { role: string; content: string }[];
+    expect(messages2[0]!.content).not.toContain("We always lead with volunteer asks.");
   });
 
   it("refuses an unknown mode before anything is spent", async () => {

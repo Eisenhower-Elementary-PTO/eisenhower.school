@@ -155,6 +155,7 @@ export function Settings() {
   const logoInput = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<NewsletterSettingsDTO | null>(null);
+  const [aiAssist, setAiAssist] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -162,7 +163,10 @@ export function Settings() {
   useEffect(() => {
     api
       .settings()
-      .then((r) => setSettings(r.settings))
+      .then((r) => {
+        setSettings(r.settings);
+        setAiAssist(r.aiAssist !== false);
+      })
       .catch((err: unknown) => setError(errorMessage(err, "Couldn't load settings.")));
   }, []);
 
@@ -358,6 +362,37 @@ export function Settings() {
             ))}
           </div>
         </Field>
+      </section>
+
+      <section className="nlx-formgrid">
+        <SectLabel>AI assistant</SectLabel>
+        <Field
+          label="Editorial guidance"
+          hint={
+            <>
+              Added to the prompt behind the composer's “Suggestions” button, after its built-in
+              instructions. Use it for house style and standing reminders — e.g. “Flag anything
+              that assumes the reader was at the last meeting” or “We always lead with
+              volunteer asks.” Plain text, up to 2000 characters. Leave blank for the stock
+              suggestions alone.
+            </>
+          }
+        >
+          <textarea
+            className="sd-input"
+            rows={5}
+            maxLength={2000}
+            value={settings.suggestionsGuidance}
+            placeholder="What should the suggestions always look for?"
+            onChange={(e) => edit({ suggestionsGuidance: e.target.value })}
+          />
+        </Field>
+        {!aiAssist && (
+          <p className="sd-meta" style={{ margin: 0 }}>
+            The AI assistant isn't set up on this site, so this text is kept but unused until it
+            is.
+          </p>
+        )}
       </section>
 
       <EditorsPicker />

@@ -268,6 +268,8 @@ export function defaultNewsletterSettings(env: Env): NewsletterSettingsDTO {
     defaultLookaheadDays: 14,
     timeZone: resolveTimeZone(env.SCHOOL_TIMEZONE),
     calendarUrl: env.CALENDAR_URL ?? "",
+    // Empty means the suggestions assist runs on its stock prompt alone.
+    suggestionsGuidance: "",
     // Off until an admin asks for it, like every other notification (NFR-1).
     newSubscriberNotify: "off",
   };
@@ -276,6 +278,13 @@ export function defaultNewsletterSettings(env: Env): NewsletterSettingsDTO {
 function str(raw: unknown, fallback: string): string {
   return typeof raw === "string" ? raw.trim() : fallback;
 }
+
+/** Upper bound on the stored suggestions guidance, in characters. It rides
+ *  every suggestions-mode assist call as prompt text, and the model call's
+ *  input is what spends the shared Workers AI allocation (see
+ *  lib/newsletterAssist.ts) — so the bound lives on write, where the settings
+ *  screen can show what was actually kept, not silently at call time. */
+export const SUGGESTIONS_GUIDANCE_MAX_CHARS = 2000;
 
 /** The footer used to be a pair of fields: plain `footerText` plus an optional
  *  `footerHtml` that overrode it. It is now HTML only, so a settings blob
@@ -335,6 +344,13 @@ export function coerceNewsletterSettings(
       ? r.defaultCalendarIds.filter((v): v is string => typeof v === "string")
       : base.defaultCalendarIds,
     defaultLookaheadDays: lookahead,
+    // Plain text into a prompt, so no sanitizer — just the type, a trim and a
+    // hard cap (truncated rather than refused: the screen echoes back what was
+    // stored, which is how every other coerced field reports itself).
+    suggestionsGuidance: str(r.suggestionsGuidance, base.suggestionsGuidance).slice(
+      0,
+      SUGGESTIONS_GUIDANCE_MAX_CHARS,
+    ),
     // Always the deployment's own zone. It rides on this DTO for the composer's
     // benefit, but it is configuration, not a setting — whatever a client sends
     // is discarded.

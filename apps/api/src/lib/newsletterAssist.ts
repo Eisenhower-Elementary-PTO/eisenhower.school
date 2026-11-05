@@ -282,14 +282,32 @@ This draft is too long to print, so this pass must also make it SHORTER: cut the
 ${SUCCINCT_ANSWER}`;
 }
 
-const SUGGESTIONS_PROMPT = `You are an experienced copy editor reviewing a school newsletter draft written by parent volunteers for families.
+const SUGGESTIONS_INTRO = `You are an experienced copy editor reviewing a school newsletter draft written by parent volunteers for families.
 The user message lists the draft's text blocks, one per line, as:
 [index] kind: text
 Inline formatting is minimal Markdown: **bold**, *italic*, ~~strike~~, [label](url).
 
-Give three to six short, specific, actionable editorial suggestions: clarity, ordering, a missing detail a family would need (a date, a time, a place, what to do), tone, reading level. Quote the draft where it helps the author find the spot. Do not rewrite the draft, do not pad the list, and do not comment on the spelling of people's names.
+Give three to six short, specific, actionable editorial suggestions: clarity, ordering, a missing detail a family would need (a date, a time, a place, what to do), tone, reading level. Quote the draft where it helps the author find the spot. Do not rewrite the draft, do not pad the list, and do not comment on the spelling of people's names.`;
 
-Answer with JSON only: {"suggestions":["<suggestion>", "..."]}`;
+const SUGGESTIONS_ANSWER = `Answer with JSON only: {"suggestions":["<suggestion>", "..."]}`;
+
+/** The suggestions system prompt, with the admins' standing guidance (the
+ *  `suggestionsGuidance` setting — house style, recurring reminders) appended
+ *  when there is any. It goes between the stock instructions and the answer
+ *  format: the guidance may sharpen or reweight the review, but the output
+ *  contract stays ours and stays last. The text is admin-written through a
+ *  system-admin-only settings write and bounded there
+ *  (`coerceNewsletterSettings`), so this end only trims. */
+export function suggestionsPrompt(guidance?: string): string {
+  const extra = guidance?.trim();
+  if (!extra) return `${SUGGESTIONS_INTRO}\n\n${SUGGESTIONS_ANSWER}`;
+  return `${SUGGESTIONS_INTRO}
+
+The newsletter's admins set standing editorial guidance for this publication. Apply it alongside the rules above:
+${extra}
+
+${SUGGESTIONS_ANSWER}`;
+}
 
 /** One call, mirroring lostFound's `describeOnce`: JSON mode (strict schema
  *  decoding derails this model — see that file), low temperature, thinking off
@@ -368,10 +386,16 @@ export async function assistSuccinct(
 }
 
 /** Editorial notes. Advice only — nothing is rewritten, so there is nothing to
- *  apply and nothing to undo; dismissing the list is the whole lifecycle. */
-export async function assistSuggestions(env: Env, doc: NewsletterNode): Promise<string[]> {
+ *  apply and nothing to undo; dismissing the list is the whole lifecycle.
+ *  `guidance` is the admins' standing text from the newsletter settings —
+ *  see `suggestionsPrompt`. */
+export async function assistSuggestions(
+  env: Env,
+  doc: NewsletterNode,
+  guidance?: string,
+): Promise<string[]> {
   const slots = collectTextSlots(doc);
-  const json = await runModel(env, SUGGESTIONS_PROMPT, slotsToPrompt(slots), 900);
+  const json = await runModel(env, suggestionsPrompt(guidance), slotsToPrompt(slots), 900);
   const raw = Array.isArray(json.suggestions) ? (json.suggestions as unknown[]) : [];
   return raw
     .filter((s): s is string => typeof s === "string")

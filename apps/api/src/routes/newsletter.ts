@@ -647,6 +647,12 @@ newsletter.post("/issues/:id/assist", async (c) => {
     );
   }
 
+  // The admins' standing guidance rides the suggestions prompt (see
+  // `suggestionsPrompt` in lib/newsletterAssist.ts). Read before the budget is
+  // claimed, so a failed settings read spends nothing from the day.
+  const guidance =
+    mode === "suggestions" ? (await getNewsletterSettings(c.env)).suggestionsGuidance : undefined;
+
   // Claimed after validation (a malformed request must not spend the day) and
   // before the model call (a failed call stays spent — it cost neurons, and
   // the cap exists to bound exactly that).
@@ -667,7 +673,7 @@ newsletter.post("/issues/:id/assist", async (c) => {
     const result: NewsletterAssistResultDTO =
       mode === "succinct"
         ? { mode, ...(await assistSuccinct(c.env, doc, reduce)), suggestions: [] }
-        : { mode, content: null, changes: [], suggestions: await assistSuggestions(c.env, doc) };
+        : { mode, content: null, changes: [], suggestions: await assistSuggestions(c.env, doc, guidance) };
     return c.json({ result });
   } catch (err) {
     // Never the model's output in a log line, matching lostFound's rule.

@@ -1275,6 +1275,12 @@ export interface NewsletterSettingsDTO {
   /** Public calendar site, from the Worker's CALENDAR_URL var. Env-derived and
    *  ignored on write, like `timeZone`. Events blocks link out to it. */
   calendarUrl: string;
+  /** Standing guidance appended to the AI assistant's editorial-suggestions
+   *  prompt — house style, recurring reminders, what the editors care about.
+   *  Plain text, admin-written, bounded on write (`coerceNewsletterSettings`);
+   *  empty means the stock prompt runs alone. Never rendered to a reader and
+   *  never on any public shape (`brandingOf` omits it). */
+  suggestionsGuidance: string;
   /** How system admins hear about someone confirming a subscription through the
    *  PUBLIC form. `off` by default, like every other notification (NFR-1).
    *

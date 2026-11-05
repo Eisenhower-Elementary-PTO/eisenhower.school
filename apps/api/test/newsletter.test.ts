@@ -1155,6 +1155,7 @@ describe("settings coercion", () => {
     defaultLookaheadDays: 14,
     timeZone: "America/Chicago",
     calendarUrl: "https://calendar.x.test",
+    suggestionsGuidance: "",
     newSubscriberNotify: "off" as const,
   };
 
@@ -1200,6 +1201,25 @@ describe("settings coercion", () => {
 
   it("lets an admin clear the footer instead of resurrecting the default", () => {
     expect(coerceNewsletterSettings({ footerHtml: "" }, base).footerHtml).toBe("");
+  });
+
+  it("trims and bounds the suggestions guidance, and lets it be cleared", () => {
+    expect(
+      coerceNewsletterSettings({ suggestionsGuidance: "  Lead with volunteer asks.  " }, base)
+        .suggestionsGuidance,
+    ).toBe("Lead with volunteer asks.");
+    // Truncated on write, not at call time — the settings screen echoes back
+    // what was actually stored.
+    expect(
+      coerceNewsletterSettings({ suggestionsGuidance: "x".repeat(5000) }, base)
+        .suggestionsGuidance.length,
+    ).toBe(2000);
+    const withGuidance = { ...base, suggestionsGuidance: "old" };
+    expect(coerceNewsletterSettings({ suggestionsGuidance: "" }, withGuidance).suggestionsGuidance)
+      .toBe("");
+    expect(coerceNewsletterSettings({ suggestionsGuidance: 42 }, withGuidance).suggestionsGuidance)
+      .toBe("old");
+    expect(coerceNewsletterSettings({}, withGuidance).suggestionsGuidance).toBe("old");
   });
 
   it("accepts each valid new-subscriber notification mode", () => {
