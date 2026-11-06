@@ -3,6 +3,11 @@
 //   - a winning line (every square in it covered AND actually called),
 //   - covered squares that were never called (a bumped shutter, or hope),
 //   - called numbers the player hasn't covered yet (just a heads-up).
+//
+// Numbers arrive from camera reading and may be null (not yet settled). A
+// covered cell with an unknown number blocks the verdict — it could be an
+// uncalled number. An OPEN cell with an unknown number never blocks: it
+// only costs the informational "you missed this one" hint.
 
 import type { CellState } from "./vision.js";
 
@@ -12,7 +17,7 @@ export type CellVerdict =
   | "false-mark" // covered, but the number was never called
   | "missed" // open, but the number WAS called
   | "open" // open, not called — nothing to do
-  | "uncertain";
+  | "uncertain"; // shutter state or covered number not readable yet
 
 export interface CheckResult {
   verdicts: CellVerdict[];
@@ -20,6 +25,7 @@ export interface CheckResult {
   missed: number[];
   /** Winning lines, as arrays of 5 cell indices. */
   lines: number[][];
+  /** False when any covered cell is still unreadable — no verdict yet. */
   readable: boolean;
 }
 
@@ -30,7 +36,7 @@ const LINES: number[][] = [
   [4, 8, 16, 20, 12].sort((a, b) => a - b),
 ];
 
-export function checkCard(numbers: number[], states: CellState[], called: number[]): CheckResult {
+export function checkCard(numbers: (number | null)[], states: CellState[], called: number[]): CheckResult {
   const calledSet = new Set(called);
   const verdicts: CellVerdict[] = [];
   const falseMarks: number[] = [];
@@ -44,18 +50,18 @@ export function checkCard(numbers: number[], states: CellState[], called: number
       verdicts.push("free");
       continue;
     }
-    const value = numbers[i] ?? 0;
-    if (state === "uncertain") {
+    const value = numbers[i] ?? null;
+    if (state === "uncertain" || (state === "marked" && value === null)) {
       verdicts.push("uncertain");
       readable = false;
     } else if (state === "marked") {
-      if (calledSet.has(value)) {
+      if (calledSet.has(value as number)) {
         verdicts.push("good-mark");
       } else {
         verdicts.push("false-mark");
-        falseMarks.push(value);
+        falseMarks.push(value as number);
       }
-    } else if (calledSet.has(value)) {
+    } else if (value !== null && calledSet.has(value)) {
       verdicts.push("missed");
       missed.push(value);
     } else {

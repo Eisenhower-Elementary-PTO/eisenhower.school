@@ -1,15 +1,15 @@
 // Pipeline tests over real card photos (cropped to the card's edges, which
 // is what the viewfinder guide hands the pipeline). Ground truth was read by
-// a human. If these fail after a vision.ts tweak, the tweak regressed the
-// reader, not the fixtures.
+// a human. If these fail after a vision/reader tweak, the tweak regressed
+// the reader, not the fixtures.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { decode } from "jpeg-js";
 import { describe, expect, it } from "vitest";
 import { scanCard, WIN_W, WIN_H, MIN_GRID_QUALITY, type Rgba, type CellState } from "../src/scan/vision.js";
-import { readCellNumber } from "../src/scan/digits.js";
+import { readCell } from "../src/scan/reader.js";
+import { CardFusion } from "../src/scan/fusion.js";
 import { checkCard } from "../src/scan/check.js";
-import { invalidCells } from "../src/scan/cards.js";
 
 function fixture(name: string): Rgba {
   const raw = decode(readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))), {
@@ -21,12 +21,15 @@ function fixture(name: string): Rgba {
 
 const M = "marked", O = "open";
 
-// fix-open.jpg: a card with five shutters slid, the rest open.
+// fix-open.jpg: five shutters slid, the rest open.
 // prettier-ignore
 const OPEN_STATES: CellState[] = [O,M,O,O,O, O,O,O,O,M, O,O,M,O,O, O,M,O,O,O, O,O,O,M,O];
-// fix-open.jpg's printed numbers (0 = FREE), human-read.
+// Printed numbers of fix-open.jpg (0 = FREE) — including under the shutters.
 // prettier-ignore
 const OPEN_NUMBERS = [7,24,35,57,68, 6,17,33,53,73, 14,27,0,56,72, 10,19,42,59,74, 15,26,41,47,66];
+// Printed numbers of fix-mixed.jpg / fix-all.jpg (same physical card).
+// prettier-ignore
+const MIXED_NUMBERS = [9,28,31,54,73, 11,24,35,46,70, 1,18,0,49,69, 10,27,32,47,74, 13,26,44,56,61];
 
 // prettier-ignore
 const FIXTURES: { name: string; states: CellState[] }[] = [
@@ -51,46 +54,110 @@ describe("scanCard", () => {
   }
 });
 
-describe("readCellNumber", () => {
-  it("prefills most open windows of a registration photo", () => {
-    const img = fixture("fix-open.jpg");
-    const scan = scanCard(img);
-    let attempted = 0, correct = 0;
-    for (const cell of scan.cells) {
-      const i = cell.row * 5 + cell.col;
-      if (i === 12 || cell.state !== "open") continue;
-      const read = readCellNumber(img, cell.cx, cell.cy, WIN_W, WIN_H);
-      if (read.text === "") continue;
-      attempted++;
-      if (Number(read.text) === OPEN_NUMBERS[i]) correct++;
+/** Read every readable cell of a fixture; returns per-cell results. */
+function readAll(name: string, numbers: number[]) {
+  const img = fixture(name);
+  const scan = scanCard(img);
+  let attempted = 0, correct = 0, wrongConfident = 0;
+  for (const cell of scan.cells) {
+    const i = cell.row * 5 + cell.col;
+    if (i === 12 || cell.state === "uncertain") continue;
+    const mode = cell.state === "marked" ? "red" : "open";
+    const read = readCell(img, cell.cx, cell.cy, WIN_W, WIN_H, mode, cell.col);
+    if (!read) continue;
+    attempted++;
+    if (read.value === numbers[i]) correct++;
+    else if (read.confident) wrongConfident++;
+  }
+  return { attempted, correct, wrongConfident };
+}
+
+describe("readCell (no registration — numbers read live, even through shutters)", () => {
+  it("reads fix-open.jpg nearly perfectly", () => {
+    const r = readAll("fix-open.jpg", OPEN_NUMBERS);
+    expect(r.attempted).toBeGreaterThanOrEqual(20);
+    expect(r.correct / r.attempted).toBeGreaterThanOrEqual(0.95);
+    expect(r.wrongConfident).toBe(0);
+  });
+
+  it("reads the mostly-covered fix-all.jpg through the shutters", () => {
+    const r = readAll("fix-all.jpg", MIXED_NUMBERS);
+    expect(r.attempted).toBeGreaterThanOrEqual(18);
+    expect(r.correct / r.attempted).toBeGreaterThanOrEqual(0.9);
+    expect(r.wrongConfident).toBe(0);
+  });
+
+  it("never returns a wrong-but-confident read on the hard fixtures", () => {
+    for (const [name, numbers] of [
+      ["fix-mixed.jpg", MIXED_NUMBERS],
+      ["fix-washed.jpg", [11,28,39,60,63, 15,22,43,52,66, 9,19,0,49,61, 14,18,33,53,62, 4,17,38,55,72]],
+    ] as const) {
+      const r = readAll(name, [...numbers]);
+      expect(r.correct / Math.max(1, r.attempted)).toBeGreaterThanOrEqual(0.8);
+      expect(r.wrongConfident).toBeLessThanOrEqual(1);
     }
-    // The register screen is a review UI: what matters is that the prefill
-    // attempts most cells and is right nearly every time it commits.
-    expect(attempted).toBeGreaterThanOrEqual(14);
-    expect(correct / attempted).toBeGreaterThanOrEqual(0.85);
+  });
+});
+
+describe("CardFusion", () => {
+  it("locks a value on two agreeing confident reads, and a tap wins", () => {
+    const f = new CardFusion();
+    expect(f.needsReading(3)).toBe(true);
+    f.addReading(3, { value: 57, score: 1.5, margin: 0.5, confident: true });
+    expect(f.numberAt(3)).toEqual({ value: 57, settled: false });
+    f.addReading(3, { value: 57, score: 1.4, margin: 0.6, confident: true });
+    expect(f.numberAt(3)).toEqual({ value: 57, settled: true });
+    expect(f.needsReading(3)).toBe(false);
+    f.pin(3, 59);
+    expect(f.numberAt(3)).toEqual({ value: 59, settled: true });
+    f.pin(3, null);
+    expect(f.numberAt(3)).toEqual({ value: 57, settled: true }); // lock remains
+  });
+
+  it("settles immediately on one emphatic read", () => {
+    const f = new CardFusion();
+    f.addReading(7, { value: 33, score: 0.4, margin: 1.2, confident: true });
+    expect(f.numberAt(7).settled).toBe(true);
+  });
+
+  it("reports the majority shutter state of recent frames", () => {
+    const f = new CardFusion();
+    f.addState(4, "marked");
+    f.addState(4, "open");
+    f.addState(4, "open");
+    expect(f.stateAt(4)).toBe("open");
   });
 });
 
 describe("checkCard", () => {
   it("confirms a clean card and flags a false mark", () => {
-    // Called: all four covered numbers (FREE needs no call) -> clean, no line.
     const clean = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19, 47]);
+    expect(clean.readable).toBe(true);
     expect(clean.falseMarks).toEqual([]);
     expect(clean.lines).toEqual([]);
-    // Remove 47 from the called list: that covered square becomes a false mark.
     const dirty = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19]);
     expect(dirty.falseMarks).toEqual([47]);
   });
 
+  it("withholds the verdict while a covered number is unknown", () => {
+    const numbers: (number | null)[] = [...OPEN_NUMBERS];
+    numbers[1] = null; // covered cell (24) not read yet
+    const res = checkCard(numbers, [...OPEN_STATES], [73, 19, 47]);
+    expect(res.readable).toBe(false);
+    expect(res.verdicts[1]).toBe("uncertain");
+    // An unknown OPEN cell does not block the verdict.
+    const numbers2: (number | null)[] = [...OPEN_NUMBERS];
+    numbers2[2] = null; // open cell
+    expect(checkCard(numbers2, [...OPEN_STATES], [24, 73, 19, 47]).readable).toBe(true);
+  });
+
   it("sees a bingo, including through the FREE square", () => {
-    // Column I (indices 1,6,11,16,21 -> 24,17,27,19,26) covered and called.
     const s = [...OPEN_STATES];
     s[6] = "marked";
     s[11] = "marked";
     s[21] = "marked";
     const res = checkCard(OPEN_NUMBERS, s, [24, 17, 27, 19, 26, 73, 47]);
     expect(res.lines).toContainEqual([1, 6, 11, 16, 21]);
-    // The main diagonal runs through FREE; the other four covered + called.
     const d = [...OPEN_STATES];
     d[0] = "marked";
     d[6] = "marked";
@@ -103,19 +170,5 @@ describe("checkCard", () => {
   it("reports called-but-uncovered numbers", () => {
     const res = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19, 47, 14, 42]);
     expect(res.missed.sort((a, b) => a - b)).toEqual([14, 42]);
-  });
-});
-
-describe("invalidCells", () => {
-  it("accepts a legal grid and catches range and duplicate errors", () => {
-    expect(invalidCells(OPEN_NUMBERS)).toEqual([]);
-    const bad = [...OPEN_NUMBERS];
-    bad[0] = 16; // B column must be 1..15
-    bad[5] = 7;
-    bad[10] = 7; // duplicate pair
-    const flagged = invalidCells(bad);
-    expect(flagged).toContain(0);
-    expect(flagged).toContain(5);
-    expect(flagged).toContain(10);
   });
 });
