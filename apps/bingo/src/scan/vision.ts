@@ -152,6 +152,32 @@ function computePlanes(img: Rgba): Planes {
   return { w, h, hue, sat, val, vBoard };
 }
 
+/** Red fraction in the tab zone at the window's left edge. The tab dome
+ *  shows red on OPEN windows and the shutter covers this zone when closed —
+ *  every true window has red here and nothing else on the card does, which
+ *  keeps the grid fit off the BINGO letters (they blur into window-like
+ *  mid-gray at analysis resolution). */
+function tabRed(p: Planes, cx: number, cy: number): number {
+  const hw = (WIN_W * p.w) / 2, hh = (WIN_H * p.h) / 2;
+  let n = 0, red = 0;
+  for (let y = Math.round(cy - hh * 0.7); y <= cy + hh * 0.7; y += 2) {
+    for (let x = Math.round(cx - hw * 1.24); x <= cx - hw * 0.5; x += 2) {
+      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
+      const i = y * p.w + x;
+      n++;
+      if (isRed(p.hue[i] ?? 0, p.sat[i] ?? 0, p.val[i] ?? 0)) red++;
+    }
+  }
+  return n ? red / n : 0;
+}
+
+/** Grid-fit score: window content plus the tab anchor. Used for the global
+ *  and tilt searches only — per-cell refinement uses plain windowness,
+ *  because the tab term pulls a single cell's center rightward. */
+function cellScore(p: Planes, cx: number, cy: number): number {
+  return windowness(p, cx, cy) + tabRed(p, cx, cy);
+}
+
 /** Fraction of the window rect at (cx, cy) that looks like window content:
  *  red shutter, or recessed paper clearly darker than the board but not
  *  ink-black. Ink scoring zero is what keeps the fit off printed text. */
@@ -196,21 +222,54 @@ export function scanCard(region: Rgba): CardScan {
   const img = downscale(region, ANALYSIS_WIDTH);
   const p = computePlanes(img);
 
-  // Global offset: the whole grid slides together over ±5% of the card.
+  // Global offset: the whole grid slides together. The vertical range is
+  // wide because the header above the grid varies by batch, and a narrow
+  // range lets the fit alias onto a one-row-shifted lattice (20 of 25
+  // windows still align there). The tabRed term in cellScore is what breaks
+  // that tie in favor of the true fit.
   let bestDx = 0, bestDy = 0, bestScore = -1;
-  for (let dy = -0.05; dy <= 0.051; dy += 0.01) {
-    for (let dx = -0.05; dx <= 0.051; dx += 0.01) {
+  for (let dy = -0.1; dy <= 0.101; dy += 0.01) {
+    for (let dx = -0.06; dx <= 0.061; dx += 0.01) {
       let score = 0;
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
-          score += windowness(p, ((COLS[c] ?? 0) + dx) * p.w, ((ROWS[r] ?? 0) + dy) * p.h);
+          score += cellScore(p, ((COLS[c] ?? 0) + dx) * p.w, ((ROWS[r] ?? 0) + dy) * p.h);
         }
       }
       if (score > bestScore) { bestScore = score; bestDx = dx; bestDy = dy; }
     }
   }
 
-  // Per-window refinement, then classification.
+  // Tilt flex: foreshortening stretches the grid linearly, so fit a pitch
+  // slope on each axis (rows and columns stay coupled — an independent
+  // per-row search wanders on small blurry inputs).
+  let vSlope = 0, hSlope = 0;
+  let bs = -1;
+  for (let s = -0.04; s <= 0.041; s += 0.005) {
+    let sum = 0;
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        sum += cellScore(p, ((COLS[c] ?? 0) + bestDx) * p.w, ((ROWS[r] ?? 0) + bestDy + s * (r - 2)) * p.h);
+      }
+    }
+    if (sum > bs) { bs = sum; vSlope = s; }
+  }
+  bs = -1;
+  for (let s = -0.04; s <= 0.041; s += 0.005) {
+    let sum = 0;
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        sum += cellScore(
+          p,
+          ((COLS[c] ?? 0) + bestDx + s * (c - 2)) * p.w,
+          ((ROWS[r] ?? 0) + bestDy + vSlope * (r - 2)) * p.h,
+        );
+      }
+    }
+    if (sum > bs) { bs = sum; hSlope = s; }
+  }
+
+  // Per-window refinement (plain windowness — see cellScore), then classify.
   const cells: CellResult[] = [];
   let qualitySum = 0, uncertain = 0;
   for (let r = 0; r < 5; r++) {
@@ -218,8 +277,8 @@ export function scanCard(region: Rgba): CardScan {
       let cx = 0, cy = 0, quality = -1;
       for (let fy = -0.022; fy <= 0.023; fy += 0.0055) {
         for (let fx = -0.022; fx <= 0.023; fx += 0.0055) {
-          const px = ((COLS[c] ?? 0) + bestDx + fx) * p.w;
-          const py = ((ROWS[r] ?? 0) + bestDy + fy) * p.h;
+          const px = ((COLS[c] ?? 0) + bestDx + hSlope * (c - 2) + fx) * p.w;
+          const py = ((ROWS[r] ?? 0) + bestDy + vSlope * (r - 2) + fy) * p.h;
           const score = windowness(p, px, py);
           if (score > quality) { quality = score; cx = px; cy = py; }
         }

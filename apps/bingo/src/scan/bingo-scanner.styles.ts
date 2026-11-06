@@ -15,6 +15,7 @@ export const scannerStyles = css`
     --red: #c00;
     --good: #1a7f37;
     --warn: #b35b00;
+    --info: #0969da;
     --line: #ddd;
   }
 
@@ -68,7 +69,7 @@ export const scannerStyles = css`
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.9em;
+    gap: 0.8em;
     padding: 1em;
     width: 100%;
     max-width: 34em;
@@ -76,91 +77,21 @@ export const scannerStyles = css`
     box-sizing: border-box;
   }
 
-  .lead,
-  .empty,
   .note {
     margin: 0;
     line-height: 1.45;
     color: #666;
   }
 
+  .hint-line {
+    font-size: 0.85em;
+    text-align: center;
+  }
+
   @media (prefers-color-scheme: dark) {
-    .lead,
-    .empty,
     .note {
       color: #aaa;
     }
-  }
-
-  /* ── home ── */
-
-  .cardlist {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6em;
-  }
-
-  .cardlist li {
-    display: flex;
-    gap: 0.5em;
-  }
-
-  .cardlist .go {
-    flex: 1;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1em;
-    font: inherit;
-    text-align: left;
-    padding: 0.9em 1em;
-    border: 2px solid var(--line);
-    border-radius: 0.75em;
-    background: none;
-    color: inherit;
-    cursor: pointer;
-  }
-
-  .cardlist .go span {
-    color: var(--red);
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .cardlist .del {
-    font: inherit;
-    font-size: 1.2em;
-    width: 2.2em;
-    border: 2px solid var(--line);
-    border-radius: 0.6em;
-    background: none;
-    color: #999;
-    cursor: pointer;
-  }
-
-  button.primary,
-  button.secondary {
-    font: inherit;
-    font-weight: 700;
-    padding: 0.85em 1.2em;
-    border-radius: 0.75em;
-    border: none;
-    cursor: pointer;
-    background: var(--red);
-    color: white;
-  }
-
-  button.primary:disabled {
-    opacity: 0.5;
-  }
-
-  button.secondary {
-    background: none;
-    border: 2px solid var(--line);
-    color: inherit;
   }
 
   /* ── viewfinder ── */
@@ -214,7 +145,7 @@ export const scannerStyles = css`
     background: var(--red);
   }
   .dot.missed {
-    background: #0969da;
+    background: var(--info);
   }
   .dot.uncertain {
     background: var(--warn);
@@ -237,7 +168,7 @@ export const scannerStyles = css`
     font-size: 0.9em;
   }
 
-  /* ── banners / results ── */
+  /* ── banners ── */
 
   .banner {
     margin: 0;
@@ -275,6 +206,8 @@ export const scannerStyles = css`
     }
   }
 
+  /* ── the read grid ── */
+
   .grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -288,9 +221,15 @@ export const scannerStyles = css`
     justify-content: center;
     aspect-ratio: 1;
     border-radius: 0.5em;
+    font: inherit;
     font-weight: 700;
+    font-size: 1.05em;
     font-variant-numeric: tabular-nums;
     border: 2px solid var(--line);
+    background: none;
+    color: inherit;
+    padding: 0;
+    cursor: pointer;
   }
 
   .result .cell.good-mark {
@@ -306,8 +245,8 @@ export const scannerStyles = css`
   }
 
   .result .cell.missed {
-    border-color: #0969da;
-    color: #0969da;
+    border-color: var(--info);
+    color: var(--info);
   }
 
   .result .cell.uncertain {
@@ -318,79 +257,68 @@ export const scannerStyles = css`
 
   .result .cell.free {
     background: rgba(128, 128, 128, 0.2);
+    cursor: default;
   }
 
-  /* ── register review ── */
-
-  .edit .cell {
-    aspect-ratio: auto;
-    padding: 0.25em;
-    gap: 0.25em;
+  .cell.editing {
+    border-color: var(--info);
+    padding: 0.2em;
   }
 
-  .edit .cell img {
-    width: 100%;
-    border-radius: 0.3em;
-    display: block;
-  }
-
-  .edit .cell input {
+  .cell.editing input {
     width: 100%;
     box-sizing: border-box;
     font: inherit;
     font-weight: 700;
     text-align: center;
-    border: 1px solid var(--line);
-    border-radius: 0.3em;
-    padding: 0.2em 0;
+    border: none;
+    outline: none;
     background: none;
     color: inherit;
   }
 
-  .edit .cell.flag {
-    border-color: var(--warn);
-    background: rgba(179, 91, 0, 0.1);
-  }
-
-  .edit .cell.free {
-    aspect-ratio: 1;
-  }
-
-  label.name {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35em;
-    font-weight: 700;
-    font-size: 0.9em;
-  }
-
-  label.name input {
-    font: inherit;
-    padding: 0.6em 0.75em;
-    border: 2px solid var(--line);
-    border-radius: 0.5em;
-    background: none;
-    color: inherit;
-  }
-
-  label.photo {
-    text-align: center;
-    color: #0969da;
-    cursor: pointer;
-    font-size: 0.95em;
-  }
-
-  label.photo input {
-    display: none;
-  }
+  /* ── actions ── */
 
   .actions {
     display: flex;
     gap: 0.75em;
   }
 
-  .actions button {
+  .actions > * {
     flex: 1;
+  }
+
+  button.secondary {
+    font: inherit;
+    font-weight: 700;
+    padding: 0.85em 1.2em;
+    border-radius: 0.75em;
+    background: none;
+    border: 2px solid var(--line);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  label.photo {
+    text-align: center;
+    color: var(--info);
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+
+  label.photo.button-like {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    padding: 0.85em 1.2em;
+    border: 2px solid var(--line);
+    border-radius: 0.75em;
+    box-sizing: border-box;
+  }
+
+  label.photo input {
+    display: none;
   }
 `;
 
