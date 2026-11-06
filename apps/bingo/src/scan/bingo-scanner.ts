@@ -241,6 +241,17 @@ export class BingoScanner extends LitElement {
 
   // ── rendering ────────────────────────────────────────────────────────────
 
+  /** Paint the whole screen with the verdict — green means bingo, red means
+   *  checked-and-no — so a checker (and the table) reads it from feet away.
+   *  Neutral while the card is still being aligned or read. */
+  override updated(): void {
+    const scan = this.scan, result = this.result;
+    const aligned = scan !== null && scan.gridQuality >= MIN_GRID_QUALITY;
+    const mode = aligned && result?.readable ? (result.lines.length > 0 ? "bingo" : "nobingo") : null;
+    if (mode) this.setAttribute("data-verdict", mode);
+    else this.removeAttribute("data-verdict");
+  }
+
   override render(): TemplateResult {
     return html`
       <header>

@@ -27,6 +27,49 @@ export const scannerStyles = css`
     }
   }
 
+  /* ── verdict wash: the whole screen answers, visible from feet away.
+        Set via the data-verdict attribute (bingo-scanner.ts, updated()). ── */
+
+  :host {
+    transition: background-color 0.4s ease;
+  }
+
+  :host([data-verdict]) {
+    color: #fff;
+    --line: rgba(255, 255, 255, 0.45);
+    --info: #fff;
+    --warn: #ffd9a0;
+  }
+
+  :host([data-verdict="bingo"]) {
+    background: #1a7f37;
+  }
+
+  :host([data-verdict="nobingo"]) {
+    background: #b3001b;
+  }
+
+  :host([data-verdict]) header .status,
+  :host([data-verdict]) .note {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  /* Banners sit on the wash: give them a white card so their own colors read. */
+  :host([data-verdict="bingo"]) .banner.bingo {
+    background: #fff;
+    color: #1a7f37;
+  }
+
+  :host([data-verdict="nobingo"]) .banner.good,
+  :host([data-verdict="nobingo"]) .banner.bad {
+    background: rgba(255, 255, 255, 0.94);
+  }
+
+  :host([data-verdict]) .result .cell.good-mark,
+  :host([data-verdict]) .result .cell.false-mark {
+    border-color: rgba(255, 255, 255, 0.85);
+  }
+
   header {
     display: flex;
     align-items: center;
