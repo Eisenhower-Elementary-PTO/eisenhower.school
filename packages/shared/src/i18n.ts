@@ -832,6 +832,11 @@ export interface Strings {
   /** The PTO's tile on the front door (apps/home). */
   landingPtoBody: string;
   landingPtoMore: string;
+  /** The Resource Center's own tile on the front door (apps/home), which
+   *  links straight to /resource-center on the PTO's site. Its title and
+   *  body reuse `ptoHowResourceTitle` / `ptoHowResourceLead`, so only the
+   *  "more" line is a key of its own. */
+  landingFrcMore: string;
   /** Lost & found (apps/lostandfound): the public browse and claim screens,
    *  the platform switcher's label and the staff no-access card. The staff
    *  screens themselves are English-only authoring chrome, like the PTO
@@ -1684,7 +1689,7 @@ const en: Strings = {
     "Gift cards for groceries, gas or clothing let a family put the help exactly where their month needs it. Leave one marked “Resource Center” at the front office, or call to arrange.",
   ptoResourceSquare: "Give dollars",
   ptoResourceSquareBody:
-    "A direct dollar donation through the PTO's store goes straight to work — any amount, no account needed.",
+    "A direct dollar donation through the PTO's store goes straight to work — any amount, no account needed. You can also drop off cash or a check marked “Resource Center” at the front office.",
   ptoResourceSquareCta: "Open the PTO store",
   ptoResourceSignupCta: "Pick a shift",
   ptoHowVolunteerOpen: "What needs help right now",
@@ -1731,6 +1736,8 @@ const en: Strings = {
     "Who the PTO is, what it runs across the year, and how to lend an hour or give.",
   landingPtoMore:
     "Every family is already a member. Nothing to join, no account needed.",
+  landingFrcMore:
+    "Asking is confidential, and giving takes a minute. No account needed.",
   // Lost & found (apps/lostandfound). Category and colour names translate the
   // fixed vocabularies LF_CATEGORIES / LF_COLORS for display only — the stored
   // value stays English, since it is what the model and the filters speak.
@@ -2515,7 +2522,7 @@ const es: Strings = {
     "Una tarjeta de regalo para despensa, gasolina o ropa permite que una familia use la ayuda exactamente donde su mes la necesita. Deje una marcada «Resource Center» en la oficina de la escuela, o llame para coordinar.",
   ptoResourceSquare: "Done en efectivo",
   ptoResourceSquareBody:
-    "Una donación directa en dólares a través de la tienda de la PTO se pone a trabajar de inmediato — cualquier monto, sin necesidad de cuenta.",
+    "Una donación directa en dólares a través de la tienda de la PTO se pone a trabajar de inmediato — cualquier monto, sin necesidad de cuenta. También puede dejar efectivo o un cheque marcado «Resource Center» en la oficina de la escuela.",
   ptoResourceSquareCta: "Abrir la tienda de la PTO",
   ptoResourceSignupCta: "Elegir un turno",
   ptoHowVolunteerOpen: "Qué necesita ayuda ahora mismo",
@@ -2562,6 +2569,8 @@ const es: Strings = {
     "Quién es la PTO, qué organiza a lo largo del año, y cómo prestar una hora o donar.",
   landingPtoMore:
     "Cada familia ya es miembro. Nada que firmar, no hace falta cuenta.",
+  landingFrcMore:
+    "Pedir ayuda es confidencial, y donar toma un minuto. No hace falta cuenta.",
   // Lost & found (apps/lostandfound). Category and colour names translate the
   // fixed vocabularies LF_CATEGORIES / LF_COLORS for display only — the stored
   // value stays English, since it is what the model and the filters speak.
@@ -3313,7 +3322,7 @@ const zh: Strings = {
     "食品、汽油或服装的礼品卡，能让家庭把帮助用在当月最需要的地方。请在学校前台留下一张写明“Resource Center”的礼品卡，或来电安排。",
   ptoResourceSquare: "直接捐款",
   ptoResourceSquareBody:
-    "通过家长会的商店直接捐款，立刻就能派上用场——金额不限，无需注册账户。",
+    "通过家长会的商店直接捐款，立刻就能派上用场——金额不限，无需注册账户。也可以把现金或写明“Resource Center”的支票交到学校前台。",
   ptoResourceSquareCta: "打开家长会商店",
   ptoResourceSignupCta: "挑选班次",
   ptoHowVolunteerOpen: "现在哪里需要帮手",
@@ -3356,6 +3365,7 @@ const zh: Strings = {
     "如果您认为自己应该有权限，请找一位理事——或者来参加下一次例会，大多数人其实就是这样来的。",
   landingPtoBody: "家长会是谁、全年举办哪些活动，以及如何出一小时力或捐款。",
   landingPtoMore: "每个家庭都已经是会员。无需报名，也不需要账户。",
+  landingFrcMore: "求助完全保密，捐助只需一分钟。无需账户。",
   // Lost & found (apps/lostandfound). Category and colour names translate the
   // fixed vocabularies LF_CATEGORIES / LF_COLORS for display only — the stored
   // value stays English, since it is what the model and the filters speak.
@@ -4198,7 +4208,7 @@ const so: Strings = {
     "Kaadh hadiyadeed oo raashin, shidaal ama dhar ah wuxuu qoyska u oggolaanayaa inay caawimada geliyaan meesha bishoodu ugu baahan tahay. Mid ku qoran “Resource Center” xafiiska hore ku dhaaf, ama soo wac si loo qabanqaabiyo.",
   ptoResourceSquare: "Lacag ku deeq",
   ptoResourceSquareBody:
-    "Deeq lacageed oo toos ah oo loo maro dukaanka PTO-da ayaa isla markiiba shaqo gasha — qaddar kasta, akoonna looma baahna.",
+    "Deeq lacageed oo toos ah oo loo maro dukaanka PTO-da ayaa isla markiiba shaqo gasha — qaddar kasta, akoonna looma baahna. Waxaad sidoo kale xafiiska hore ku dhaafi kartaa lacag caddaan ah ama jeeg ku qoran “Resource Center”.",
   ptoResourceSquareCta: "Fur dukaanka PTO-da",
   ptoResourceSignupCta: "Dooro wardi",
   ptoHowVolunteerOpen: "Waxa hadda caawimaad u baahan",
@@ -4245,6 +4255,8 @@ const so: Strings = {
     "Cidda PTO-du tahay, waxa ay sannadka oo dhan qabato, iyo sida aad saacad ugu deeqi karto ama lacag u bixin karto.",
   landingPtoMore:
     "Qoys kastaa horeyba xubin buu u yahay. Waxba lama saxiixo, xisaabna looma baahna.",
+  landingFrcMore:
+    "Codsashadu waa qarsoodi, deeq bixintuna hal daqiiqad bay qaadataa. Xisaab looma baahna.",
   // Lost & found (apps/lostandfound). Category and colour names translate the
   // fixed vocabularies LF_CATEGORIES / LF_COLORS for display only — the stored
   // value stays English, since it is what the model and the filters speak.

@@ -104,7 +104,7 @@ export async function renderHome(
     // FIRST, and deliberately. A stranger who lands on this domain is most often
     // asking "what is this?" before "let me look someone up" — and unlike the
     // three below, this one needs no account, no subscription and nothing of
-    // them at all. It is also the only tile that answers the question the school
+    // them at all. It is also the tile that answers the question the school
     // office gets asked most: how do I give money to the PTO.
     {
       title: t("ptoTitle"),
@@ -112,6 +112,19 @@ export async function renderHome(
       host: hostOf(env.PTO_URL),
       body: t("landingPtoBody"),
       more: escapeHtml(t("landingPtoMore")),
+      membersOnly: false,
+    },
+    // The Resource Center, by name. It lives on the PTO's site, but the family
+    // that needs it — and the one ready to give to it — should not have to find
+    // it through the PTO tile; /resource-center was built to be the URL on a
+    // flyer, and this is the same hand-off from the front door. Title and body
+    // are the Center's own strings, so this tile can never drift from its page.
+    {
+      title: t("ptoHowResourceTitle"),
+      href: appHref(env.PTO_URL, "/resource-center", locale),
+      host: hostOf(env.PTO_URL),
+      body: t("ptoHowResourceLead"),
+      more: escapeHtml(t("landingFrcMore")),
       membersOnly: false,
     },
     {

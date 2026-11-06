@@ -209,6 +209,20 @@ describe("the landing page", () => {
     );
   });
 
+  it("hands the Resource Center to a family straight from the front door", async () => {
+    // Its own tile, open to all, linking the page built to be handed out — in
+    // every language, with the choice carried across the hop.
+    for (const locale of LOCALES) {
+      const html = await body(`/?lang=${locale}`);
+      expect(html).toContain(
+        `href="https://pto.eisenhower.school/resource-center?lang=${locale}"`,
+      );
+      expect(html).toContain(escapeHtml(dictionaries[locale].ptoHowResourceTitle));
+      expect(html).toContain(escapeHtml(dictionaries[locale].ptoHowResourceLead));
+      expect(html).toContain(escapeHtml(dictionaries[locale].landingFrcMore));
+    }
+  });
+
   it("carries the reader's language into every app link", async () => {
     const html = await body("/?lang=so");
     expect(html).toContain("https://directory.eisenhower.school/sign-in?lang=so");
