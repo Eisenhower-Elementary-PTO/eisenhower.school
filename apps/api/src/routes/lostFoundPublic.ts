@@ -69,6 +69,11 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
   const body = await c.req.json<LfClaimInput>().catch(() => null);
   const name = cleanText(body?.name, 100);
   const contact = cleanText(body?.contact, 200);
+  // Whose child it is and their teacher (migration 0043) — optional: the item
+  // may be the claimant's own, or they may not know the room. Staff-only once
+  // stored, exactly like `name` and `contact`.
+  const childName = cleanText(body?.childName, 100);
+  const teacher = cleanText(body?.teacher, 100);
   const message = cleanText(body?.message, 1000);
   if (!name || contact.length < 3) return c.json({ error: "invalid" }, 400);
 
@@ -103,15 +108,16 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
     // `contact` as typed — "after 3pm, 612-555-0100 ext 5" is for a person to
     // read — and the normalized key beside it for the cap above.
     await c.env.DB.prepare(
-      "INSERT INTO lf_claim (id, item_id, name, contact, contact_key, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO lf_claim (id, item_id, name, contact, contact_key, child_name, teacher, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, item.id, name, contact, key, message, nowIso())
+      .bind(id, item.id, name, contact, key, childName, teacher, message, nowIso())
       .run();
 
     // Anonymous: the actor column is null, as newsletter.subscribed's is. The
-    // claimant's name and contact stay out of `detail` — audit rows are never
-    // deleted, and this claim's contact details are (lib/lostFound.ts). Slack
-    // gets the bare fact through `notify`, with no item text and no claimant.
+    // claimant's name and contact — and the child's name and teacher — stay
+    // out of `detail`: audit rows are never deleted, and this claim's details
+    // are (lib/lostFound.ts). Slack gets the bare fact through `notify`, with
+    // no item text and no claimant.
     c.var.audit.push({
       action: "lostfound.claim.created",
       entityKind: "lf_claim",

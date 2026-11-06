@@ -135,6 +135,8 @@ function ClaimPanel({ itemId }: { itemId: string }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
+  const [childName, setChildName] = useState("");
+  const [teacher, setTeacher] = useState("");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [busy, setBusy] = useState(false);
@@ -150,7 +152,7 @@ function ClaimPanel({ itemId }: { itemId: string }) {
     setBusy(true);
     setError(false);
     try {
-      await api.claim(itemId, { name, contact, message, website });
+      await api.claim(itemId, { name, contact, childName, teacher, message, website });
       setSent(true);
     } catch {
       setError(true);
@@ -198,6 +200,27 @@ function ClaimPanel({ itemId }: { itemId: string }) {
             maxLength={200}
             autoComplete="email"
             required
+          />
+          {/* Whose child it is and their teacher, so the office can send the
+              item home through the classroom. Optional: the item may be the
+              claimant's own, or they may not know the room. */}
+          <label className="sd-label" htmlFor="lf-claim-child">{t("lfClaimChild")}</label>
+          <input
+            id="lf-claim-child"
+            className="sd-input"
+            value={childName}
+            onChange={(e) => setChildName(e.target.value)}
+            maxLength={100}
+            autoComplete="off"
+          />
+          <label className="sd-label" htmlFor="lf-claim-teacher">{t("lfClaimTeacher")}</label>
+          <input
+            id="lf-claim-teacher"
+            className="sd-input"
+            value={teacher}
+            onChange={(e) => setTeacher(e.target.value)}
+            maxLength={100}
+            autoComplete="off"
           />
           <label className="sd-label" htmlFor="lf-claim-message">{t("lfClaimMessage")}</label>
           <textarea

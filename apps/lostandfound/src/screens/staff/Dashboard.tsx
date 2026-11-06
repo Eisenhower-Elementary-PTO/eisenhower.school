@@ -267,6 +267,12 @@ export function Dashboard() {
                     is theirs
                   </div>
                   <ContactLink contact={c.contact} />
+                  {(c.childName || c.teacher) && (
+                    <div style={{ overflowWrap: "anywhere" }}>
+                      For {c.childName || "their child"}
+                      {c.teacher && ` · ${c.teacher}`}
+                    </div>
+                  )}
                   {c.message && <div style={{ overflowWrap: "anywhere" }}>“{c.message}”</div>}
                   <div className="sd-meta">{formatDayTime(c.createdAt, locale)}</div>
                   <div className="lf-actions" style={{ marginTop: 4 }}>

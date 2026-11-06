@@ -2060,6 +2060,13 @@ export interface LfPublicListDTO {
 export interface LfClaimInput {
   name: string;
   contact: string;
+  /** The child the item belongs to, if the claimant is naming one (migration
+   *  0043). Optional — the item may be the claimant's own. Free text for the
+   *  office; staff-only like every other claim field. */
+  childName?: string;
+  /** That child's teacher or room, so the office can send the item back
+   *  through the classroom. Optional free text; staff-only. */
+  teacher?: string;
   message?: string;
   website?: string;
 }
@@ -2111,6 +2118,11 @@ export interface LfClaimDTO {
   thumbUrl: string;
   name: string;
   contact: string;
+  /** Whose child the item is, as the claimant typed it ("" when they didn't
+   *  say). A child's name: staff screens only, like `name` and `contact`. */
+  childName: string;
+  /** The child's teacher or room, as typed ("" when not given). */
+  teacher: string;
   message: string;
   createdAt: string;
   resolvedAt: string | null;

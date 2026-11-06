@@ -140,6 +140,12 @@ export interface LfClaimRow {
   item_id: string;
   name: string;
   contact: string;
+  /** The child the claimant says the item belongs to ("" when they didn't
+   *  say) and that child's teacher or room (migration 0043). Anonymous free
+   *  text with the same posture as `name`/`contact`/`message`: staff-only,
+   *  never in audit `detail`, Slack or email, swept with the claim. */
+  child_name: string;
+  teacher: string;
   message: string;
   created_at: string;
   resolved_at: string | null;
@@ -270,6 +276,8 @@ export function claimOf(row: LfClaimRow & { item_title: string; thumb_key: strin
     thumbUrl: staffMediaUrl(origin, row.thumb_key),
     name: row.name,
     contact: row.contact,
+    childName: row.child_name,
+    teacher: row.teacher,
     message: row.message,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,

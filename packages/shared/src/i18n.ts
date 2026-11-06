@@ -875,6 +875,8 @@ export interface Strings {
   lfClaimCta: string;
   lfClaimName: string;
   lfClaimContact: string;
+  lfClaimChild: string;
+  lfClaimTeacher: string;
   lfClaimMessage: string;
   lfClaimMessageHint: string;
   lfClaimSend: string;
@@ -1769,6 +1771,8 @@ const en: Strings = {
   lfClaimCta: "That's mine!",
   lfClaimName: "Your name",
   lfClaimContact: "Email or phone",
+  lfClaimChild: "Your child's name (optional)",
+  lfClaimTeacher: "Their teacher (optional)",
   lfClaimMessage: "How do you know it's yours? (optional)",
   lfClaimMessageHint: "For example: a dent on the bottom, or a sticker",
   lfClaimSend: "Send to the office",
@@ -1776,7 +1780,7 @@ const en: Strings = {
   lfClaimThanksTitle: "Thank you!",
   lfClaimThanksBody: "The office has your note and will be in touch. You can also pick it up from the lost and found.",
   lfClaimError: "That didn't send. Check your name and contact, then try again.",
-  lfClaimPrivacy: "Only school staff see your name and contact.",
+  lfClaimPrivacy: "Only school staff see what you type here.",
   lfStaffEdit: "Edit this item",
   lfSignInToAdd: "Found something? Sign in to add it",
   lfNavSubmit: "Add item",
@@ -2598,6 +2602,8 @@ const es: Strings = {
   lfClaimCta: "¡Es mío!",
   lfClaimName: "Tu nombre",
   lfClaimContact: "Correo electrónico o teléfono",
+  lfClaimChild: "El nombre de tu hijo o hija (opcional)",
+  lfClaimTeacher: "Su maestro o maestra (opcional)",
   lfClaimMessage: "¿Cómo sabes que es tuyo? (opcional)",
   lfClaimMessageHint: "Por ejemplo: una abolladura abajo o una calcomanía",
   lfClaimSend: "Enviar a la oficina",
@@ -2605,7 +2611,7 @@ const es: Strings = {
   lfClaimThanksTitle: "¡Gracias!",
   lfClaimThanksBody: "La oficina recibió tu mensaje y se pondrá en contacto contigo. También puedes recogerlo en objetos perdidos.",
   lfClaimError: "No se pudo enviar. Revisa tu nombre y tu contacto e inténtalo de nuevo.",
-  lfClaimPrivacy: "Solo el personal de la escuela ve tu nombre y tu contacto.",
+  lfClaimPrivacy: "Solo el personal de la escuela ve lo que escribes aquí.",
   lfStaffEdit: "Editar este objeto",
   lfSignInToAdd: "¿Encontraste algo? Inicia sesión para agregarlo",
   lfNavSubmit: "Agregar",
@@ -3390,6 +3396,8 @@ const zh: Strings = {
   lfClaimCta: "这是我的！",
   lfClaimName: "你的姓名",
   lfClaimContact: "电子邮箱或电话",
+  lfClaimChild: "孩子的姓名（选填）",
+  lfClaimTeacher: "孩子的老师（选填）",
   lfClaimMessage: "你怎么知道这是你的？（选填）",
   lfClaimMessageHint: "例如：底部有凹痕，或贴着贴纸",
   lfClaimSend: "发送给办公室",
@@ -3397,7 +3405,7 @@ const zh: Strings = {
   lfClaimThanksTitle: "谢谢！",
   lfClaimThanksBody: "办公室已收到你的留言，会与你联系。你也可以直接到失物招领处领取。",
   lfClaimError: "发送失败。请检查姓名和联系方式后重试。",
-  lfClaimPrivacy: "只有学校工作人员能看到你的姓名和联系方式。",
+  lfClaimPrivacy: "只有学校工作人员能看到你在这里填写的内容。",
   lfStaffEdit: "编辑此物品",
   lfSignInToAdd: "捡到东西了？登录即可添加",
   lfNavSubmit: "添加物品",
@@ -4277,6 +4285,8 @@ const so: Strings = {
   lfClaimCta: "Waa kayga!",
   lfClaimName: "Magacaaga",
   lfClaimContact: "Iimayl ama telefoon",
+  lfClaimChild: "Magaca ilmahaaga (ikhtiyaari)",
+  lfClaimTeacher: "Macallinka ilmahaaga (ikhtiyaari)",
   lfClaimMessage: "Sideed ku ogtahay inuu kaaga yahay? (ikhtiyaari)",
   lfClaimMessageHint: "Tusaale: hoosta ayuu ka godan yahay, ama stiikar ayuu leeyahay",
   lfClaimSend: "U dir xafiiska",
@@ -4284,7 +4294,7 @@ const so: Strings = {
   lfClaimThanksTitle: "Mahadsanid!",
   lfClaimThanksBody: "Xafiisku wuu helay fariintaada, wayna kula soo xiriiri doonaan. Sidoo kale waxaad ka qaadan kartaa meesha alaabta lumay.",
   lfClaimError: "Lama dirin. Hubi magacaaga iyo xiriirkaaga, kadibna mar kale isku day.",
-  lfClaimPrivacy: "Shaqaalaha dugsiga oo keliya ayaa arka magacaaga iyo xiriirkaaga.",
+  lfClaimPrivacy: "Shaqaalaha dugsiga oo keliya ayaa arka waxa aad halkan ku qorto.",
   lfStaffEdit: "Wax ka beddel shaygan",
   lfSignInToAdd: "Wax ma heshay? Gal si aad ugu darto",
   lfNavSubmit: "Ku dar",

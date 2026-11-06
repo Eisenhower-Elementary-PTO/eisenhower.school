@@ -634,7 +634,13 @@ function claimEnv(opts: { item?: LfItemRow | null; total?: number; mine?: number
 }
 
 describe("POST /lostfound-public/items/:id/claims", () => {
-  const claim = { name: "Pat", contact: "pat@example.com", message: "Dent on the bottom" };
+  const claim = {
+    name: "Pat",
+    contact: "pat@example.com",
+    childName: "Milo",
+    teacher: "Ms. Shrestha",
+    message: "Dent on the bottom",
+  };
 
   async function post(body: unknown, opts: Parameters<typeof claimEnv>[0] = {}) {
     const audit: AuditDraft[] = [];
@@ -658,9 +664,14 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     expect(r.json).toEqual({ ok: true });
     expect(r.writes).toHaveLength(1);
     expect(r.writes[0]).toContain("contact_key");
+    // The child's name and teacher (migration 0043) land on the row…
+    expect(r.writes[0]).toContain("child_name");
+    expect(r.writes[0]).toContain("Milo");
+    expect(r.writes[0]).toContain("Ms. Shrestha");
     expect(r.audit).toHaveLength(1);
     expect(r.audit[0]!.action).toBe("lostfound.claim.created");
-    expect(JSON.stringify(r.audit[0])).not.toMatch(/Pat|example\.com|Dent/);
+    // …and nowhere else: audit rows are forever, claims are swept.
+    expect(JSON.stringify(r.audit[0])).not.toMatch(/Pat|example\.com|Milo|Shrestha|Dent/);
   });
 
   it("mails each configured address — the item's title and the queue link, never the claimant", async () => {
@@ -670,8 +681,9 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     for (const m of r.sent) {
       expect(m.subject).toContain("Blue water bottle");
       expect(m.text).toContain("https://lostandfound.eisenhower.school/staff");
-      // The claimant's name, contact and message stay behind the session.
-      expect(`${m.subject} ${m.text} ${m.html}`).not.toMatch(/Pat|example\.com|Dent/);
+      // The claimant's name, contact, child, teacher and message stay behind
+      // the session.
+      expect(`${m.subject} ${m.text} ${m.html}`).not.toMatch(/Pat|example\.com|Milo|Shrestha|Dent/);
     }
   });
 
