@@ -14,6 +14,7 @@ import type {
   NewsletterIssueDTO,
   NewsletterIssueInput,
   NewsletterIssueSummaryDTO,
+  NewsletterMetricsDTO,
   NewsletterSettingsDTO,
   NewsletterSubscriberDTO,
   NewsletterSubscriberImportResultDTO,
@@ -179,6 +180,7 @@ export const api = {
 
   // ── The gate ── may this member author? Resolved server-side; see lib/access.tsx.
   access: () => request<NewsletterAccessDTO>("/newsletter/access"),
+  metrics: () => request<{ metrics: NewsletterMetricsDTO }>("/newsletter/metrics"),
 
   // Who may author (system admin). The picker lists generic groups only.
   editorGroups: () =>

@@ -27,6 +27,7 @@ import { ulid } from "../lib/ids.js";
 import { randomToken, sha256 } from "../lib/crypto.js";
 import { sendEmail } from "../lib/email.js";
 import { notifyNewSubscriber } from "../lib/notify.js";
+import { recordIssueMetric } from "../lib/newsletterMetrics.js";
 import {
   brandingOf,
   confirmSubscriptionUrl,
@@ -115,6 +116,26 @@ newsletterPublic.get("/issues/:slug", async (c) => {
 
   const settings = await getNewsletterSettings(c.env);
   return c.json(await issuePageOf(c.env, row, brandingOf(settings)));
+});
+
+/** POST /newsletter-public/issues/:slug/view — the archive page's readership
+ *  beacon (migration 0042; all the rules live in lib/newsletterMetrics.ts).
+ *
+ *  Anonymous and open, like the page that carries it. Three properties:
+ *
+ *   · the answer is ALWAYS `{ ok: true }` — a draft slug, an unknown slug, a
+ *     junk body and a failed write all look identical, so the counter can't be
+ *     turned into the slug oracle invariant 10's SQL gate exists to prevent;
+ *   · the body is read as text, because `navigator.sendBeacon` sends
+ *     text/plain — which is also what keeps the cross-origin POST a "simple
+ *     request" that needs no preflight (it fires from the translate proxy's
+ *     origin too, where CORS would never be configured);
+ *   · no audit draft — a counter bump per public page load is `read_budget`'s
+ *     kind of write, not a member action (see the lib header). */
+newsletterPublic.post("/issues/:slug/view", async (c) => {
+  const raw = await c.req.text().catch(() => "");
+  await recordIssueMetric(c.env, c.req.param("slug"), raw);
+  return c.json({ ok: true }, 200, { "cache-control": "no-store" });
 });
 
 /** GET /newsletter-public/preview/:token — one issue by its review link.

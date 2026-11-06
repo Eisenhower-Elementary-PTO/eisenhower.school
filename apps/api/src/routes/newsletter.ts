@@ -75,6 +75,7 @@ import {
   collectTextSlots,
   slotsTextLength,
 } from "../lib/newsletterAssist.js";
+import { newsletterMetrics } from "../lib/newsletterMetrics.js";
 import { randomToken, sha256 } from "../lib/crypto.js";
 import {
   recipientCounts,
@@ -467,13 +468,22 @@ newsletter.delete("/issues/:id", async (c) => {
   }
 
   // Re-checked inside the DELETE: a publish landing between the read and this
-  // write must not have its page vanish under it.
-  const gone = await c.env.DB.prepare(
-    "DELETE FROM newsletter_issue WHERE id = ? AND status = 'draft' AND published_at IS NULL",
-  )
-    .bind(id)
-    .run();
-  if (!gone.meta.changes) {
+  // write must not have its page vanish under it. The readership tallies go
+  // first — an issue that was published, viewed and unpublished has counter
+  // rows (migration 0042) whose REFERENCES would fail this delete — and each
+  // child DELETE carries the SAME draft-and-unpublished guard as a subquery:
+  // a batch is atomic but not conditional, so without it a publish racing in
+  // would keep the issue while this batch had already erased its history.
+  const deletable =
+    "EXISTS (SELECT 1 FROM newsletter_issue WHERE id = ?1 AND status = 'draft' AND published_at IS NULL)";
+  const [, , gone] = await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM newsletter_issue_view WHERE issue_id = ?1 AND ${deletable}`).bind(id),
+    c.env.DB.prepare(`DELETE FROM newsletter_issue_click WHERE issue_id = ?1 AND ${deletable}`).bind(id),
+    c.env.DB.prepare(
+      "DELETE FROM newsletter_issue WHERE id = ?1 AND status = 'draft' AND published_at IS NULL",
+    ).bind(id),
+  ]);
+  if (!gone!.meta.changes) {
     return c.json({ error: "conflict", message: "This issue changed — reload and try again." }, 409);
   }
   c.var.audit.push({
@@ -482,6 +492,18 @@ newsletter.delete("/issues/:id", async (c) => {
     entityId: id,
   });
   return c.json({ ok: true });
+});
+
+/** GET /newsletter/metrics — readership of the public archive, for editors.
+ *
+ *  Behind `requireEditor`, not `isSystemAdmin`: the numbers say how the thing
+ *  the editors write is read, and hold nothing a subscriber list does — they
+ *  are aggregate page-load tallies with no reader identity anywhere in the
+ *  schema to leak (migration 0042). */
+newsletter.get("/metrics", async (c) => {
+  const auth = await requireEditor(c);
+  if (!auth) return c.json({ error: "forbidden" }, 403);
+  return c.json({ metrics: await newsletterMetrics(c.env) });
 });
 
 // ── Review links ────────────────────────────────────────────────────────────

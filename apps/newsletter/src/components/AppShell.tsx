@@ -71,7 +71,7 @@ export function AppShell({
   );
 }
 
-export type NavKey = "newsletter" | "admin";
+export type NavKey = "newsletter" | "metrics" | "admin";
 
 /** This app's OWN screens. The directory and the calendar used to be here as
  *  absolute URLs; they are now in the platform switcher (AppSwitcher.tsx). One
@@ -86,6 +86,10 @@ export function navItems(t: ReturnType<typeof useI18n>["t"], canEdit: boolean, i
   const items: [IconName, NavKey, string, string][] = [
     ["mail", "newsletter", t("navNewsletter"), canEdit ? "/admin" : "/preferences"],
   ];
+  // Readership of the public archive — an editor's view of their own work, so
+  // it rides the editor tier, not the admin one (same split as the API's
+  // GET /newsletter/metrics).
+  if (canEdit) items.push(["eye", "metrics", t("navMetrics"), "/admin/metrics"]);
   if (isSystemAdmin) items.push(["shield", "admin", t("navAdmin"), "/admin/settings"]);
   return items;
 }

@@ -1174,6 +1174,37 @@ Worker, sharing one session:
    **`/privacy` changed first** (its own rule): the lost & found block and the
    Workers AI line, all four languages.
 
+34. **Newsletter readership is a TALLY, never a visit log.** Migration 0042's
+   two tables (`newsletter_issue_view`, `newsletter_issue_click`) hold counts
+   per issue × school-local day × language / destination HOST — no row per
+   reader, no IP/UA/cookie/member id anywhere in the schema, so a "who read
+   it" can never be served because it is never held. The count comes from an
+   inline beacon on the PUBLISHED issue page only (`viewBeacon` in
+   `apps/newsletter/functions/_lib/page.ts`, keyed on `issueUrl` — print and
+   review-token pages stay dark), because the page is edge-cached and counting
+   server renders would miss most readers; it is also how TRANSLATED reads are
+   seen at all (the script runs inside `translate.goog` and reads `_x_tr_tl`).
+   The write path is `POST /newsletter-public/issues/:slug/view`
+   (`lib/newsletterMetrics.ts`): the body is bucketed, never stored — `lang`
+   to LOCALES+`other`, a click `href` to a parsed hostname with proxy hosts
+   decoded back, new destinations capped per issue per day — so the beacon's
+   word bounds nothing and the tables can't be grown by a script. The response
+   is `{ ok: true }` for published, draft and missing slugs alike (invariant
+   10's gate, restated for a POST), and the write pushes NO audit draft
+   (`read_budget`'s reasoning — a counter bump is not a member action).
+   `GET /newsletter/metrics` is `requireEditor` (the numbers describe the
+   editors' own work and hold nothing the subscriber list does); the screen is
+   `apps/newsletter/src/screens/Metrics.tsx`. The drafts-only issue DELETE
+   clears both counter tables inside its batch, each child DELETE carrying the
+   same draft-and-unpublished guard as a subquery — D1 enforces the
+   REFERENCES, and an issue can be published, viewed, then unpublished back
+   into a deletable draft. `/privacy` deliberately did NOT change: nothing new
+   reaches a third party, and what we hold is strictly less than the zone-wide
+   Cloudflare counting the page already names. Email opens are deliberately
+   not tracked — no pixel, ever; the numbers are a floor and the screen says
+   so. `test/newsletterMetrics.test.ts` pins the oracle posture, the
+   bucketing, the school-local day and the delete cleanup.
+
 ## Conventions
 
 - TypeScript strict everywhere. `verbatimModuleSyntax` — `import type` for

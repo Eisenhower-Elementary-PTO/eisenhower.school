@@ -140,6 +140,7 @@ const EDITOR_ROUTES: Route[] = [
   ["POST", "/newsletter/issues/01ISSUE/send"],
   ["POST", "/newsletter/issues/01ISSUE/retry"],
   ["GET", "/newsletter/settings"],
+  ["GET", "/newsletter/metrics"],
   ["POST", "/newsletter/media", "png-bytes", "image/png"],
 ];
 

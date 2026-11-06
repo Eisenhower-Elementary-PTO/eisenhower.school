@@ -41,6 +41,8 @@ export interface Strings {
   /** The admin entry in every app's nav — one label and one icon (shield) in
    *  all five, where it used to be "Admin" in three and "Settings" in two. */
   navAdmin: string;
+  /** The newsletter app's readership screen, for editors. */
+  navMetrics: string;
   /** The PTO app's own boards tab. */
   navBoards: string;
   /** The mobile tab, and the desktop sidebar section, that holds the platform
@@ -986,6 +988,7 @@ const en: Strings = {
   navGroups: "Groups",
   navMe: "You",
   navAdmin: "Admin",
+  navMetrics: "Metrics",
   navBoards: "Boards",
   navApps: "Apps",
   navAppsLead: "The rest of the site. One account works everywhere.",
@@ -1879,6 +1882,7 @@ const es: Strings = {
   navGroups: "Grupos",
   navMe: "Tú",
   navAdmin: "Admin",
+  navMetrics: "Métricas",
   navBoards: "Tableros",
   navApps: "Apps",
   navAppsLead: "El resto del sitio. Una sola cuenta funciona en todas partes.",
@@ -2704,6 +2708,7 @@ const zh: Strings = {
   navGroups: "群组",
   navMe: "我",
   navAdmin: "管理",
+  navMetrics: "统计",
   navBoards: "看板",
   navApps: "应用",
   navAppsLead: "网站的其他部分。一个账户，处处通用。",
@@ -3489,6 +3494,7 @@ const so: Strings = {
   navGroups: "Kooxaha",
   navMe: "Adiga",
   navAdmin: "Maamul",
+  navMetrics: "Tirokoob",
   navBoards: "Looxyada",
   navApps: "Apps",
   navAppsLead: "Qaybaha kale ee bogga. Hal akoon ayaa meel walba ka shaqeeya.",

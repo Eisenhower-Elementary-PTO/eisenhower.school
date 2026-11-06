@@ -106,6 +106,51 @@ ${input.print ? PRINT_SCRIPT : ""}
 </html>`;
 }
 
+/** The readership beacon carried by the PUBLIC page of a published issue — the
+ *  one page of the four issue routes that is counted, because it is the one
+ *  readers get. It POSTs to the API's anonymous counter
+ *  (/newsletter-public/issues/:slug/view, lib/newsletterMetrics.ts) on load,
+ *  and again for each outbound link click. It runs client-side because the page
+ *  itself is edge-cached (html() below): counting server renders would miss
+ *  every reader the cache served.
+ *
+ *  What it sends is deliberately everything it will ever send: a `kind`, a
+ *  `lang`, a clicked `href`. No identifier exists on this origin to include —
+ *  the session cookie is host-only to the API and never present here — and the
+ *  server buckets even these fields before writing (the beacon's word bounds
+ *  nothing).
+ *
+ *  `lang` is how translated readership is seen at all: a translated issue is
+ *  read ON translate.goog (invariant 23), where this same script runs inside
+ *  Google's rewritten page and reads the target language from `_x_tr_tl`. The
+ *  `sessionStorage` guard trims reloads to one view per tab session; it is
+ *  best-effort (private windows may throw) and wrapped accordingly.
+ *  `navigator.sendBeacon` with a string body is a no-preflight simple request,
+ *  which is what lets it fire cross-origin from the proxy's origin too. */
+function viewBeacon(env: PagesEnv, slug: string): string {
+  const url = `${env.API_BASE}/newsletter-public/issues/${encodeURIComponent(slug)}/view`;
+  return `    <script>
+(function(){try{
+var u=${JSON.stringify(url)};
+var send=function(p){var b=JSON.stringify(p);
+  if(navigator.sendBeacon){navigator.sendBeacon(u,b)}
+  else{fetch(u,{method:"POST",body:b,mode:"no-cors",keepalive:true}).catch(function(){})}};
+var lang="en";
+if(/\\.translate\\.goog$/.test(location.hostname)){
+  lang=new URLSearchParams(location.search).get("_x_tr_tl")||"other"}
+var seen=false,k="nl-viewed:"+${JSON.stringify(slug)};
+try{seen=sessionStorage.getItem(k)==="1";if(!seen)sessionStorage.setItem(k,"1")}catch(e){}
+if(!seen&&!navigator.webdriver)send({kind:"view",lang:lang});
+addEventListener("click",function(e){
+  var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;
+  if(!a)return;var h=a.href||"";
+  if(h.indexOf("http")!==0)return;
+  send({kind:"click",href:h});
+},true);
+}catch(e){}})();
+    </script>`;
+}
+
 /** Fires the print dialog once the page has settled.
  *
  *  On `load` rather than immediately: a masthead logo that hasn't decoded yet
@@ -275,6 +320,12 @@ export async function renderIssuePage(
       : "",
   });
 
+  // Counted: the public page of a published issue, and nothing else. `issueUrl`
+  // is non-"" on exactly one route (/n/:slug — see IssuePageOptions); the print
+  // twin and both token routes stay dark, so a review link's reads never land
+  // in the readership numbers.
+  const beacon = opts.issueUrl && !opts.print && issue.slug ? viewBeacon(env, issue.slug) : "";
+
   return send(
     shell({
       title: `${issue.title} — ${branding.newsletterTitle}`,
@@ -292,7 +343,7 @@ export async function renderIssuePage(
       // this is the belt to its braces, and it costs a boolean.
       noindex: opts.print || !opts.cacheable,
       print: opts.print,
-      body,
+      body: body + (beacon ? `\n${beacon}` : ""),
     }),
   );
 }

@@ -5,6 +5,7 @@ import { SignIn, CheckEmail } from "./screens/Onboarding.js";
 import { Issues } from "./screens/Issues.js";
 import { IssueEditor } from "./screens/IssueEditor.js";
 import { IssuePrint } from "./screens/IssuePrint.js";
+import { Metrics } from "./screens/Metrics.js";
 import { Settings } from "./screens/Settings.js";
 import { Subscribers } from "./screens/Subscribers.js";
 import { Preferences } from "./screens/Preferences.js";
@@ -106,6 +107,7 @@ export function App() {
       {/* No Function claims /admin/*, so this falls through to the bundle — see
           ROUTING.md before adding a Function anywhere near it. */}
       <Route path="/admin/issues/:id/print" element={<RequireEditor><IssuePrint /></RequireEditor>} />
+      <Route path="/admin/metrics" element={<RequireEditor><Metrics /></RequireEditor>} />
       <Route path="/admin/settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
       <Route path="/admin/subscribers" element={<RequireAdmin><Subscribers /></RequireAdmin>} />
 

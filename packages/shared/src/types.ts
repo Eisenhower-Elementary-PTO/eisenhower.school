@@ -1402,6 +1402,35 @@ export interface NewsletterSubscriptionDTO {
   subscribed: boolean;
 }
 
+/** One published issue's readership tallies (GET /newsletter/metrics).
+ *  Aggregate page-load counts only — the counters hold no reader identity of
+ *  any kind (migration 0042), so there is nothing finer to expose. */
+export interface NewsletterIssueMetricsDTO {
+  issueId: string;
+  slug: string;
+  title: string;
+  publishedAt: string;
+  sentAt: string | null;
+  /** Page loads of the issue's public web page, all languages. */
+  total: number;
+  /** Page loads by reading language — a LOCALES code, or "other" for a
+   *  translate-proxy target outside the site's own four. "en" is a direct
+   *  (untranslated) read. */
+  byLang: Record<string, number>;
+}
+
+/** GET /newsletter/metrics — readership of the public archive. */
+export interface NewsletterMetricsDTO {
+  /** Published issues, newest first, with their view tallies. */
+  issues: NewsletterIssueMetricsDTO[];
+  /** Views per school-local day across all issues, oldest first (recent window). */
+  days: { day: string; views: number }[];
+  /** Where readers went from an issue page, by destination hostname. */
+  clicks: { dest: string; clicks: number }[];
+  /** All-time page loads across every issue. */
+  totalViews: number;
+}
+
 /** Branding needed to render a public page, without exposing sender identity. */
 export interface NewsletterBrandingDTO {
   newsletterTitle: string;
