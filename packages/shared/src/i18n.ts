@@ -959,6 +959,34 @@ export interface Strings {
   bingoViewOnly: string;
   bingoSignInTitle: string;
   bingoSyncError: string;
+
+  // bingo card scanner (apps/bingo, /scan) — checks a physical Finger-Tip
+  // shutter card against the live board with the phone camera. Register a
+  // card's 25 numbers once; every game night is then a camera-only check.
+  bingoScanTitle: string;
+  bingoScanLead: string;
+  bingoScanNoCards: string;
+  bingoScanRegister: string;
+  bingoScanStart: string;
+  bingoScanStop: string;
+  bingoScanAlign: string;
+  bingoScanUnreadable: string;
+  bingoScanBingo: string;
+  bingoScanClean: string;
+  bingoScanFalseMarks: string; // uses {nums}
+  bingoScanMissed: string; // uses {nums}
+  bingoScanCamera: string;
+  bingoScanPhoto: string;
+  bingoRegLead: string;
+  bingoRegCapture: string;
+  bingoRegRetake: string;
+  bingoRegPhoto: string;
+  bingoRegReviewLead: string;
+  bingoRegNameLabel: string;
+  bingoRegNamePlaceholder: string;
+  bingoRegSave: string;
+  bingoRegInvalid: string;
+  bingoCardDelete: string;
 }
 
 const en: Strings = {
@@ -1848,6 +1876,31 @@ const en: Strings = {
   bingoViewOnly: "Watching — sign in to run the board",
   bingoSignInTitle: "Sign in to run the board",
   bingoSyncError: "Offline — the board will catch up when the connection returns.",
+
+  bingoScanTitle: "Card check",
+  bingoScanLead: "Point the camera at a card to check it against the board.",
+  bingoScanNoCards: "No cards saved yet. Register a card once and it can be checked at every game.",
+  bingoScanRegister: "Register a card",
+  bingoScanStart: "Check this card",
+  bingoScanStop: "Stop",
+  bingoScanAlign: "Fit the card inside the frame and hold the phone flat",
+  bingoScanUnreadable: "Can't read every square — hold steady",
+  bingoScanBingo: "BINGO — this card wins!",
+  bingoScanClean: "Every covered square was called. No bingo yet.",
+  bingoScanFalseMarks: "Covered but never called: {nums}",
+  bingoScanMissed: "Called but not covered: {nums}",
+  bingoScanCamera: "Camera unavailable — allow camera access and try again.",
+  bingoScanPhoto: "Check from a photo",
+  bingoRegLead: "Open every shutter, lay the card flat, and fill the frame.",
+  bingoRegCapture: "Capture",
+  bingoRegRetake: "Retake",
+  bingoRegPhoto: "Use a photo instead",
+  bingoRegReviewLead: "Check every number against the card and fix any that are wrong.",
+  bingoRegNameLabel: "Card name",
+  bingoRegNamePlaceholder: "e.g. Blue sticker 3",
+  bingoRegSave: "Save card",
+  bingoRegInvalid: "Fix the highlighted squares — each column has its own range.",
+  bingoCardDelete: "Remove",
 };
 
 const es: Strings = {
@@ -2681,6 +2734,31 @@ const es: Strings = {
   bingoViewOnly: "Solo espectador — inicia sesión para manejar el tablero",
   bingoSignInTitle: "Inicia sesión para manejar el tablero",
   bingoSyncError: "Sin conexión — el tablero se pondrá al día cuando vuelva la conexión.",
+
+  bingoScanTitle: "Revisión de cartones",
+  bingoScanLead: "Apunta la cámara a un cartón para compararlo con el tablero.",
+  bingoScanNoCards: "Aún no hay cartones guardados. Registra un cartón una vez y podrás revisarlo en cada juego.",
+  bingoScanRegister: "Registrar un cartón",
+  bingoScanStart: "Revisar este cartón",
+  bingoScanStop: "Detener",
+  bingoScanAlign: "Encuadra el cartón dentro del marco y mantén el teléfono plano",
+  bingoScanUnreadable: "No se pueden leer todas las casillas — mantén firme la cámara",
+  bingoScanBingo: "¡BINGO! Este cartón gana.",
+  bingoScanClean: "Todas las casillas cubiertas fueron cantadas. Aún no hay bingo.",
+  bingoScanFalseMarks: "Cubiertas pero no cantadas: {nums}",
+  bingoScanMissed: "Cantadas pero sin cubrir: {nums}",
+  bingoScanCamera: "Cámara no disponible — permite el acceso a la cámara e inténtalo de nuevo.",
+  bingoScanPhoto: "Revisar desde una foto",
+  bingoRegLead: "Abre todas las ventanillas, pon el cartón plano y llena el marco.",
+  bingoRegCapture: "Capturar",
+  bingoRegRetake: "Repetir",
+  bingoRegPhoto: "Usar una foto",
+  bingoRegReviewLead: "Compara cada número con el cartón y corrige los que estén mal.",
+  bingoRegNameLabel: "Nombre del cartón",
+  bingoRegNamePlaceholder: "p. ej. Cartón azul 3",
+  bingoRegSave: "Guardar cartón",
+  bingoRegInvalid: "Corrige las casillas resaltadas — cada columna tiene su propio rango.",
+  bingoCardDelete: "Eliminar",
 };
 
 const zh: Strings = {
@@ -3476,6 +3554,31 @@ const zh: Strings = {
   bingoViewOnly: "观看模式 — 登录后可操作游戏板",
   bingoSignInTitle: "登录以操作游戏板",
   bingoSyncError: "已离线 — 网络恢复后游戏板会自动同步。",
+
+  bingoScanTitle: "卡片核对",
+  bingoScanLead: "将相机对准宾果卡，与游戏板进行核对。",
+  bingoScanNoCards: "还没有保存的卡片。登记一次卡片后，每场游戏都能核对。",
+  bingoScanRegister: "登记卡片",
+  bingoScanStart: "核对这张卡",
+  bingoScanStop: "停止",
+  bingoScanAlign: "让卡片对齐框内，手机保持水平",
+  bingoScanUnreadable: "部分格子无法识别 — 请拿稳",
+  bingoScanBingo: "BINGO！这张卡赢了。",
+  bingoScanClean: "盖住的数字都已叫到。还没有宾果。",
+  bingoScanFalseMarks: "已盖住但未叫到：{nums}",
+  bingoScanMissed: "已叫到但未盖住：{nums}",
+  bingoScanCamera: "无法使用相机 — 请允许相机权限后重试。",
+  bingoScanPhoto: "用照片核对",
+  bingoRegLead: "打开所有滑窗，把卡片放平并充满取景框。",
+  bingoRegCapture: "拍摄",
+  bingoRegRetake: "重拍",
+  bingoRegPhoto: "改用照片",
+  bingoRegReviewLead: "逐一核对每个数字，有错就改。",
+  bingoRegNameLabel: "卡片名称",
+  bingoRegNamePlaceholder: "例如：蓝色卡 3",
+  bingoRegSave: "保存卡片",
+  bingoRegInvalid: "请修正高亮的格子 — 每列有自己的数字范围。",
+  bingoCardDelete: "删除",
 };
 
 const so: Strings = {
@@ -4367,6 +4470,31 @@ const so: Strings = {
   bingoViewOnly: "Daawasho kaliya — gal si aad looxa u maamusho",
   bingoSignInTitle: "Gal si aad looxa bingo u maamusho",
   bingoSyncError: "Khadku wuu maqan yahay — looxu wuu is cusboonaysiin doonaa marka xiriirku soo noqdo.",
+
+  bingoScanTitle: "Hubinta kaararka",
+  bingoScanLead: "Kamerada ku toosi kaarka si loogu hubiyo looxa.",
+  bingoScanNoCards: "Weli kaar lama kaydin. Hal mar diiwaangeli kaarka, ciyaar kastana waa la hubin karaa.",
+  bingoScanRegister: "Diiwaangeli kaar",
+  bingoScanStart: "Hubi kaarkan",
+  bingoScanStop: "Jooji",
+  bingoScanAlign: "Kaarka geli gudaha sanduuqa, telefoonkana siman u hay",
+  bingoScanUnreadable: "Qaar ka mid ah sanduuqyada lama akhrin karo — xasili kamerada",
+  bingoScanBingo: "BINGO — kaarkan waa guuleystay!",
+  bingoScanClean: "Dhammaan meelaha la daboolay waa la yeeray. Weli bingo ma jiro.",
+  bingoScanFalseMarks: "La daboolay laakiin aan la yeerin: {nums}",
+  bingoScanMissed: "La yeeray laakiin aan la daboolin: {nums}",
+  bingoScanCamera: "Kamerada lama heli karo — ogolow kamerada kadibna isku day mar kale.",
+  bingoScanPhoto: "Ka hubi sawir",
+  bingoRegLead: "Fur dhammaan daaqadaha, kaarka siman dhig, sanduuqana buuxi.",
+  bingoRegCapture: "Qaad sawir",
+  bingoRegRetake: "Mar kale qaad",
+  bingoRegPhoto: "Sawir isticmaal",
+  bingoRegReviewLead: "Lambar kasta kaarka ku barbar dhig oo sax kuwa qaldan.",
+  bingoRegNameLabel: "Magaca kaarka",
+  bingoRegNamePlaceholder: "tus. Kaarka buluugga 3",
+  bingoRegSave: "Kaydi kaarka",
+  bingoRegInvalid: "Sax sanduuqyada la muujiyay — tiir kastaa wuxuu leeyahay xad u gaar ah.",
+  bingoCardDelete: "Tirtir",
 };
 
 export const dictionaries: Record<Locale, Strings> = { en, es, zh, so };
