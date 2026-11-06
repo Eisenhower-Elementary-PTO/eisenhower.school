@@ -74,7 +74,10 @@ export const scannerStyles = css`
     display: flex;
     align-items: center;
     gap: 0.75em;
-    padding: 0.6em 0.9em;
+    /* Home-screen standalone mode runs edge-to-edge: keep the chrome out
+       of the notch and the home indicator (viewport-fit=cover). */
+    padding: calc(0.6em + env(safe-area-inset-top, 0px)) calc(0.9em + env(safe-area-inset-right, 0px)) 0.6em
+      calc(0.9em + env(safe-area-inset-left, 0px));
     border-bottom: 1px solid var(--line);
   }
 
@@ -113,7 +116,7 @@ export const scannerStyles = css`
     display: flex;
     flex-direction: column;
     gap: 0.8em;
-    padding: 1em;
+    padding: 1em 1em calc(1em + env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: 34em;
     margin: 0 auto;
