@@ -8,7 +8,8 @@ name: Deploy
 # (migrations, then the three Workers, in order) → `pages`, a matrix that
 # builds and deploys the seven front ends side by side. Front ends ship after
 # the API on purpose: a bundle calling a route the live API doesn't have yet is
-# broken until it does.
+# broken until it does. `notify` posts one Slack line when the run lands,
+# green or red — see the job's own header for its secret and its silences.
 on:
   push:
     branches: [main]
@@ -209,3 +210,51 @@ jobs:
         run: pnpm build
       - name: Deploy
         run: pnpm exec wrangler pages deploy ${{ matrix.deploy }} --branch main
+
+  # One Slack line when the run lands: a deploy confirmation on green, an
+  # alarm on red. The webhook is the SLACK_WEBHOOK_URL ACTIONS secret
+  # (repo Settings → Secrets and variables → Actions) — the same Incoming
+  # Webhook URL the API Worker holds works here, but it is a separate copy:
+  # GitHub and Cloudflare don't share secrets. Absent-means-off, the
+  # RESEND_API_KEY contract: no secret, no post, and the run stays green.
+  #
+  # Two deliberate silences. A CANCELLED run says nothing — `concurrency`
+  # cancels a superseded deploy and the run that replaced it will speak. A
+  # SKIPPED `pages` with no failure says nothing either — that is the
+  # Cloudflare-secrets-absent no-op, where nothing shipped and nothing broke.
+  notify:
+    needs: [verify, workers, pages]
+    if: always() && (needs.pages.result == 'success' || contains(needs.*.result, 'failure'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post deploy result to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OUTCOME: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
+          # Multiline on a merge commit; the shell below keeps the first line.
+          # Empty on workflow_dispatch, where the sha stands in.
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured — skipping."
+            exit 0
+          fi
+          title="${COMMIT_MSG%%$'\n'*}"
+          [ -n "$title" ] || title="${SHA:0:7}"
+          # Slack mrkdwn treats & < > as syntax (<…|…> is a link), and a commit
+          # title is arbitrary text — same escaping as the API's slackNotify.ts.
+          title=$(printf '%s' "$title" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+          if [ "$OUTCOME" = "success" ]; then
+            text=":rocket: Deployed to production — *${title}* (\`${SHA:0:7}\`) — ${ACTOR}. <${RUN_URL}|View run>"
+          else
+            text=":rotating_light: Production deploy FAILED — *${title}* (\`${SHA:0:7}\`) — ${ACTOR}. <${RUN_URL}|View run>"
+          fi
+          payload=$(jq -n --arg text "$text" '{text: $text}')
+          # The webhook URL is a bearer capability; never echo it. GitHub masks
+          # secrets in logs, and -o /dev/null keeps responses out of them too.
+          curl -fsS -o /dev/null -X POST -H 'Content-Type: application/json' \
+            -d "$payload" "$SLACK_WEBHOOK_URL" \
+            || echo "::warning::Slack post failed (the deploy itself is unaffected)."
