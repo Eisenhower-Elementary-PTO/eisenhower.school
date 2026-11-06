@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Like the board: public but deliberately NOT indexed. -->
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#222222" />
+    <!-- System fonts only, as everywhere in this app (see ../index.html). -->
+    <link rel="icon" href="data:," />
+    <title>Bingo · Card check</title>
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body,
+        html {
+          background: #111;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <bingo-scanner></bingo-scanner>
+    <script type="module" src="/src/scan/main.ts"></script>
+  </body>
+</html>

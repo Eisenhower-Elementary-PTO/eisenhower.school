@@ -15,6 +15,7 @@
     "lit": "^3.3.0"
   },
   "devDependencies": {
+    "jpeg-js": "^0.4.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^2.1.8",
