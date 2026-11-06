@@ -38,32 +38,6 @@ function translatedSummary(byLang: Record<string, number>): string {
     .join(" · ");
 }
 
-function DayStrip({ days }: { days: { day: string; views: number }[] }) {
-  // The last 30 days of the series, padded with nothing — a missing day simply
-  // has no bar. Heights scale to the window's own max so a quiet month still
-  // shows its shape.
-  const recent = days.slice(-30);
-  const max = Math.max(1, ...recent.map((d) => d.views));
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48 }}>
-      {recent.map((d) => (
-        <div
-          key={d.day}
-          title={`${d.day}: ${d.views} view${d.views === 1 ? "" : "s"}`}
-          style={{
-            flex: 1,
-            minWidth: 3,
-            borderRadius: 2,
-            height: `${Math.max(8, Math.round((d.views / max) * 100))}%`,
-            background: "var(--blue)",
-            opacity: 0.85,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 export function Metrics() {
   const desktop = useIsDesktop();
   const navigate = useNavigate();
@@ -95,13 +69,6 @@ export function Metrics() {
               as a floor.
             </p>
           </div>
-
-          {metrics.days.length > 0 && (
-            <div className="sd-card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontWeight: 700 }}>Last 30 days</div>
-              <DayStrip days={metrics.days} />
-            </div>
-          )}
 
           <div>
             <div style={{ fontWeight: 700, padding: "0 2px 6px" }}>By issue</div>
