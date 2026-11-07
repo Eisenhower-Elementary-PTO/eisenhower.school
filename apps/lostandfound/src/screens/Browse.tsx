@@ -93,21 +93,24 @@ export function Browse() {
               {t("lfLabelTip")}
             </a>
           </p>
-          {/* The whole listing's size, steady while someone searches or
-              filters. Zero says nothing — the empty grid already does. */}
+          {/* One stat line: the listing's size (steady while someone searches
+              or filters) and, once anything has gone home, the all-time
+              returns beside it. Zeroes say nothing — the empty grid already
+              does, and a board with no reunions yet has nothing to brag
+              about. */}
           {total !== null && total > 0 && (
             <p className="sd-meta" style={{ marginTop: 6 }}>
-              {total === 1 ? t("lfItemCountOne") : t("lfItemCount", { n: total })}
-            </p>
-          )}
-          {/* All-time reunions, from the audit log (returned items leave the
-              table). Zero says nothing — a brand-new board has no record to
-              brag about yet. */}
-          {returnedTotal !== null && returnedTotal > 0 && (
-            <p className="sd-meta" style={{ marginTop: 2 }}>
-              {returnedTotal === 1
-                ? t("lfReturnedCountOne")
-                : t("lfReturnedCount", { n: returnedTotal })}
+              {returnedTotal !== null && returnedTotal > 0
+                ? t("lfCounts", {
+                    found: total === 1 ? t("lfCountsFoundOne") : t("lfCountsFound", { n: total }),
+                    returned:
+                      returnedTotal === 1
+                        ? t("lfCountsReturnedOne")
+                        : t("lfCountsReturned", { n: returnedTotal }),
+                  })
+                : total === 1
+                  ? t("lfItemCountOne")
+                  : t("lfItemCount", { n: total })}
             </p>
           )}
         </div>

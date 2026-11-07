@@ -853,9 +853,14 @@ export interface Strings {
   /** The count up top: how many items are listed in all. One/many forms. */
   lfItemCountOne: string;
   lfItemCount: string;
-  /** All-time returns: how many items have ever gone home. One/many forms. */
-  lfReturnedCountOne: string;
-  lfReturnedCount: string;
+  /** The one-line stat when items have gone home: composes the two phrases
+   *  below, so each language owns its comma and ordering. When nothing has
+   *  been returned yet, the lfItemCount pair above renders alone instead. */
+  lfCounts: string;
+  lfCountsFoundOne: string;
+  lfCountsFound: string;
+  lfCountsReturnedOne: string;
+  lfCountsReturned: string;
   lfSearchPlaceholder: string;
   lfSearchLabel: string;
   lfAllCategories: string;
@@ -1771,8 +1776,11 @@ const en: Strings = {
   lfLabelTip: "Eisenhower parents have had good luck using these fabric stickers to label their belongings",
   lfItemCountOne: "1 item is waiting for its owner.",
   lfItemCount: "{n} items are waiting for their owners.",
-  lfReturnedCountOne: "1 item has made it back to its owner so far.",
-  lfReturnedCount: "{n} items have made it back to their owners so far.",
+  lfCounts: "{found}, {returned}.",
+  lfCountsFoundOne: "1 item found",
+  lfCountsFound: "{n} items found",
+  lfCountsReturnedOne: "1 returned to its owner",
+  lfCountsReturned: "{n} returned to their owners",
   lfSearchPlaceholder: "Try “blue water bottle” or “dinosaur hoodie”",
   lfSearchLabel: "Search found items",
   lfAllCategories: "All categories",
@@ -2619,8 +2627,11 @@ const es: Strings = {
   lfLabelTip: "A las familias de Eisenhower les han dado buen resultado estas etiquetas de tela para marcar sus pertenencias",
   lfItemCountOne: "1 objeto espera a su dueño.",
   lfItemCount: "{n} objetos esperan a sus dueños.",
-  lfReturnedCountOne: "Hasta ahora, 1 objeto ha vuelto con su dueño.",
-  lfReturnedCount: "Hasta ahora, {n} objetos han vuelto con sus dueños.",
+  lfCounts: "{found}, {returned}.",
+  lfCountsFoundOne: "1 objeto encontrado",
+  lfCountsFound: "{n} objetos encontrados",
+  lfCountsReturnedOne: "1 devuelto a su dueño",
+  lfCountsReturned: "{n} devueltos a sus dueños",
   lfSearchPlaceholder: "Prueba «botella de agua azul» o «sudadera de dinosaurio»",
   lfSearchLabel: "Buscar objetos encontrados",
   lfAllCategories: "Todas las categorías",
@@ -3429,8 +3440,11 @@ const zh: Strings = {
   lfLabelTip: "Eisenhower 的家长们反映，用这种布质标签贴给物品写上名字，效果很好",
   lfItemCountOne: "有 1 件物品在等失主。",
   lfItemCount: "有 {n} 件物品在等失主。",
-  lfReturnedCountOne: "到目前为止，已有 1 件物品物归原主。",
-  lfReturnedCount: "到目前为止，已有 {n} 件物品物归原主。",
+  lfCounts: "{found}，{returned}。",
+  lfCountsFoundOne: "找到 1 件物品",
+  lfCountsFound: "找到 {n} 件物品",
+  lfCountsReturnedOne: "1 件已物归原主",
+  lfCountsReturned: "{n} 件已物归原主",
   lfSearchPlaceholder: "试试“蓝色水壶”或“恐龙卫衣”",
   lfSearchLabel: "搜索招领物品",
   lfAllCategories: "所有类别",
@@ -4335,8 +4349,11 @@ const so: Strings = {
   lfLabelTip: "Waalidiinta Eisenhower waxay natiijo wanaagsan ka heleen istiikarradan maro ah si ay alaabtooda u calaamadeeyaan",
   lfItemCountOne: "1 shay ayaa sugaya qofkii lahaa.",
   lfItemCount: "{n} shay ayaa sugaya dadkii lahaa.",
-  lfReturnedCountOne: "Ilaa hadda, 1 shay ayaa ku noqday qofkii lahaa.",
-  lfReturnedCount: "Ilaa hadda, {n} shay ayaa ku noqday dadkii lahaa.",
+  lfCounts: "{found}, {returned}.",
+  lfCountsFoundOne: "1 shay oo la helay",
+  lfCountsFound: "{n} shay oo la helay",
+  lfCountsReturnedOne: "1 loo celiyay qofkii lahaa",
+  lfCountsReturned: "{n} loo celiyay dadkii lahaa",
   lfSearchPlaceholder: "Isku day “dhalo biyo buluug ah” ama “funaanad dinosaur”",
   lfSearchLabel: "Raadi alaabta la helay",
   lfAllCategories: "Dhammaan noocyada",
