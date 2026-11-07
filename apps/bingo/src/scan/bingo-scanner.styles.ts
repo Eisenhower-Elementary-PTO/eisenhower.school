@@ -49,7 +49,6 @@ export const scannerStyles = css`
     background: #b3001b;
   }
 
-  :host([data-verdict]) header .status,
   :host([data-verdict]) .note {
     color: rgba(255, 255, 255, 0.88);
   }
@@ -70,53 +69,15 @@ export const scannerStyles = css`
     border-color: rgba(255, 255, 255, 0.85);
   }
 
-  header {
-    display: flex;
-    align-items: center;
-    gap: 0.75em;
-    /* Home-screen standalone mode runs edge-to-edge: keep the chrome out
-       of the notch and the home indicator (viewport-fit=cover). */
-    padding: calc(0.6em + env(safe-area-inset-top, 0px)) calc(0.9em + env(safe-area-inset-right, 0px)) 0.6em
-      calc(0.9em + env(safe-area-inset-left, 0px));
-    border-bottom: 1px solid var(--line);
-  }
-
-  header h1 {
-    font-size: 1.1em;
-    margin: 0;
-    flex: 1;
-  }
-
-  header .back {
-    font: inherit;
-    font-size: 1.4em;
-    line-height: 1;
-    background: none;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    padding: 0.1em 0.3em;
-  }
-
-  header .status {
-    font-size: 0.85em;
-    color: #777;
-    max-width: 40%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  header .status.off {
-    color: var(--warn);
-  }
-
   main {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 0.8em;
-    padding: 1em 1em calc(1em + env(safe-area-inset-bottom, 0px));
+    /* Home-screen standalone mode runs edge-to-edge: keep the content out
+       of the notch and the home indicator (viewport-fit=cover). */
+    padding: calc(1em + env(safe-area-inset-top, 0px)) calc(1em + env(safe-area-inset-right, 0px))
+      calc(1em + env(safe-area-inset-bottom, 0px)) calc(1em + env(safe-area-inset-left, 0px));
     width: 100%;
     max-width: 34em;
     margin: 0 auto;
@@ -127,11 +88,6 @@ export const scannerStyles = css`
     margin: 0;
     line-height: 1.45;
     color: #666;
-  }
-
-  .hint-line {
-    font-size: 0.85em;
-    text-align: center;
   }
 
   @media (prefers-color-scheme: dark) {

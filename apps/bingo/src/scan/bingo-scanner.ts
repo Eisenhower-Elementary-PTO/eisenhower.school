@@ -32,8 +32,6 @@ export class BingoScanner extends LitElement {
   static override styles = scannerStyles;
 
   @state() private called: number[] = [];
-  @state() private current: number | null = null;
-  @state() private offline = false;
   @state() private cameraError = false;
   @state() private scan: CardScan | null = null;
   @state() private result: CheckResult | null = null;
@@ -77,11 +75,9 @@ export class BingoScanner extends LitElement {
     try {
       const { state } = await api.state();
       this.called = state.markedNumbers;
-      this.current = state.currentNumber;
-      this.offline = false;
       this.refreshVerdict();
     } catch {
-      this.offline = true;
+      // Offline: keep the last-known called numbers; the next poll retries.
     }
   }
 
@@ -254,18 +250,10 @@ export class BingoScanner extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <header>
-        <button class="back" @click=${this.openBoard} aria-label="board">▦</button>
-        <h1>${t("bingoScanTitle")}</h1>
-        <span class="status ${this.offline ? "off" : ""}"
-          >${this.offline ? t("bingoSyncError") : this.boardSummary()}</span
-        >
-      </header>
       <main class="scanview">
         ${this.renderViewfinder()}
         ${this.renderBanner()}
         ${this.renderGrid()}
-        <p class="note hint-line">${t("bingoScanFixHint")}</p>
         <div class="actions">
           <button class="secondary" @click=${this.nextCard}>${t("bingoScanNext")}</button>
           <label class="photo button-like">
@@ -284,16 +272,6 @@ export class BingoScanner extends LitElement {
         </div>
       </main>
     `;
-  }
-
-  private openBoard = (): void => {
-    window.location.href = "/";
-  };
-
-  private boardSummary(): string {
-    const letter =
-      this.current === null ? "" : `${LETTERS[Math.floor((this.current - 1) / 15)] ?? ""}${this.current} · `;
-    return `${letter}${this.called.length}/75`;
   }
 
   private renderViewfinder(): TemplateResult {
