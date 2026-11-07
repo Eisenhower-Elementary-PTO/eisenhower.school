@@ -288,7 +288,7 @@ function secondsToUtcMidnight(now: Date): number {
  * Bound one account's rate of reading OTHER families, per minute and per day.
  *
  * ONE switch for both: an absent `READ_LIMIT` binding means the whole budget is
- * off, the contract an absent `RESEND_API_KEY` has — so tests and local dev
+ * off, the contract an absent `SLACK_WEBHOOK_URL` has — so tests and local dev
  * need no limiter, write no counter rows, and behave exactly as before.
  *
  * A system admin is NOT exempt. The temptation is to wave them through, and

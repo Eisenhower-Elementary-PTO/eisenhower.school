@@ -22,48 +22,36 @@ import {
   magicLinkEmail,
   directoryInviteEmail,
   sendEmail,
-  sendEmailResult,
   sendEmailBatchResult,
-  isTransientSendError,
-  RESEND_PACE_MS,
+  EMAIL_PACE_MS,
 } from "../lib/email.js";
 import type { QueuedInvite } from "../lib/bulkImport.js";
 
 export const admin = new Hono<HonoEnv>();
 
-/** Messages per /emails/batch call. Small enough that one refused batch's
- *  single-send fallback fits INVITE_FALLBACK_BUDGET whole, so a bad address
- *  never costs its neighbours their mail. */
+/** Messages per batch-seam call: the unit of pacing and of withdrawal — a
+ *  refused slice's casualties are withdrawn as soon as the slice settles, so
+ *  the ~30s waitUntil kill can strand at most one slice. */
 const INVITE_BATCH = 10;
 
-/** Batch calls per invocation. Each is one subrequest and one unit against
- *  Resend's meter, but this whole function runs in a request's waitUntil,
- *  which the runtime kills roughly 30 seconds after the response — and the
- *  pacing sleeps are what dominate that clock. Fifteen paced batches (~16s of
- *  sleep) mail 150 invites and still leave room for one refused batch's
- *  fallback. Anything past the cap is withdrawn UP FRONT (see below), while
- *  this function is certain to still be alive. */
+/** Batch calls per invocation. This whole function runs in a request's
+ *  waitUntil, which the runtime kills roughly 30 seconds after the response —
+ *  and the pacing sleeps are what dominate that clock. Fifteen paced slices
+ *  (~16s of sleep) mail 150 invites with margin. Anything past the cap is
+ *  withdrawn UP FRONT (see below), while this function is certain to still be
+ *  alive. */
 const INVITE_BATCH_BUDGET = 15;
 
-/** Single-send fallback attempts per invocation — a subrequest and a paced
- *  second each, so bounded for both of the reasons above. */
-const INVITE_FALLBACK_BUDGET = 10;
-
-/** Email bulk-import sign-in links, batched and paced.
+/** Email bulk-import sign-in links, sliced and paced.
  *
- *  The same two ceilings that broke the October 2026 newsletter send apply
- *  here (lib/newsletterSend.ts has the story): Resend's per-second meter, and
- *  the free plan's 50-subrequest cap — which the old shape, one fetch per
- *  address with no pause, would have hit mid-list on any roster-sized import,
- *  with every failure swallowed by sendEmail. Batching answers both at once:
- *  one /emails/batch call carries INVITE_BATCH messages as ONE subrequest and
- *  one unit against the meter, so a 100-family import is ten fetches.
- *
- *  A batch is accepted or refused as a whole. A TRANSIENT refusal (the meter,
- *  a 5xx, a timeout) gets one more try after a pause, since a per-second 429
- *  clears in exactly one; a refusal that persists falls back to paced single
- *  sends for that slice only, so one bad address costs its own send, not its
- *  nine neighbours.
+ *  The two ceilings that broke the October 2026 newsletter send apply here
+ *  too (lib/newsletterSend.ts has the story): the channel's per-second meter,
+ *  and the free plan's 50-subrequest cap of the time — which the old shape,
+ *  one unpaced fetch per address, hit mid-list on any roster-sized import,
+ *  with every failure swallowed by sendEmail. The batch seam answers both:
+ *  each slice of INVITE_BATCH messages rides one paced, per-message-retried
+ *  sendEmailBatchResult call, reported per message, so a refusal costs its
+ *  own invite and never its nine neighbours.
  *
  *  Anything this function cannot mail is WITHDRAWN rather than stranded:
  *  unlike the newsletter there is no ledger to resume from (the raw token
@@ -83,7 +71,7 @@ export async function sendBulkInvites(
   invites: QueuedInvite[],
   opts: { paceMs?: number } = {}, // test seam, like runFanOut's
 ): Promise<void> {
-  const paceMs = opts.paceMs ?? RESEND_PACE_MS;
+  const paceMs = opts.paceMs ?? EMAIL_PACE_MS;
 
   const mailable = invites.slice(0, INVITE_BATCH * INVITE_BATCH_BUDGET);
   const overflow = invites.slice(mailable.length);
@@ -91,7 +79,6 @@ export async function sendBulkInvites(
     await withdrawUnmailedInvites(env, overflow, "beyond this run's send budget");
   }
 
-  let fallbackLeft = INVITE_FALLBACK_BUDGET;
   for (let i = 0; i < mailable.length; i += INVITE_BATCH) {
     if (i > 0 && paceMs > 0) await sleep(paceMs);
     const slice = mailable.slice(i, i + INVITE_BATCH);
@@ -103,44 +90,18 @@ export async function sendBulkInvites(
 
     const batch = await sendEmailBatchResult(env, msgs, paceMs);
 
-    // The Cloudflare channel reports per message (and already retried each
-    // transient failure once), so a refusal is per-invite: withdraw exactly
-    // those. Re-running the WHOLE batch here would duplicate the accepted
-    // sends, and the single-send fallback below exists only for Resend's
-    // all-or-nothing batch verdict.
-    if (batch.results) {
-      const stranded = slice.filter((_, j) => !(batch.results?.[j]?.ok ?? false));
-      if (stranded.length > 0) {
-        await withdrawUnmailedInvites(env, stranded, "the mail channel refused it");
-      }
-      continue;
-    }
-
-    let whole: typeof batch = batch;
-    if (!whole.ok && isTransientSendError(whole.error ?? "")) {
-      if (paceMs > 0) await sleep(paceMs);
-      whole = await sendEmailBatchResult(env, msgs, paceMs);
-    }
-    if (whole.ok) continue;
-
-    const stranded: QueuedInvite[] = [];
-    for (let j = 0; j < slice.length; j++) {
-      const inv = slice[j];
-      const msg = msgs[j];
-      if (!inv || !msg) continue;
-      if (fallbackLeft === 0) {
-        stranded.push(...slice.slice(j));
-        break;
-      }
-      // Pause before the FIRST single too — the batch that just failed may
-      // have failed on this very second's meter.
-      if (paceMs > 0) await sleep(paceMs);
-      fallbackLeft--;
-      const single = await sendEmailResult(env, msg);
-      if (!single.ok) stranded.push(inv);
-    }
+    // The channel reports per message (and already retried each transient
+    // failure once), so a refusal is per-invite: withdraw exactly those.
+    // Re-sending the slice would duplicate the accepted sends. No `results`
+    // means the channel is off and the messages were logged (dev) — then
+    // `ok` speaks for the slice as a whole.
+    const stranded = batch.results
+      ? slice.filter((_, j) => !(batch.results?.[j]?.ok ?? false))
+      : batch.ok
+        ? []
+        : slice;
     if (stranded.length > 0) {
-      await withdrawUnmailedInvites(env, stranded, "Resend refused it");
+      await withdrawUnmailedInvites(env, stranded, "the mail channel refused it");
     }
   }
 }

@@ -251,8 +251,9 @@ export function defaultNewsletterSettings(env: Env): NewsletterSettingsDTO {
   const school = env.SCHOOL_NAME;
   return {
     senderName: school,
-    // Empty means "use the instance-wide EMAIL_FROM". An admin can override it,
-    // but only with an address Resend has verified for this domain.
+    // Empty means "use the instance-wide EMAIL_FROM". An admin can override
+    // it; an address off the onboarded sending domain keeps its display name
+    // and survives as Reply-To (lib/email.ts).
     senderEmail: "",
     replyTo: null,
     // The footer is authored as HTML, so even the stock wording is markup. The

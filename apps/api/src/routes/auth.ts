@@ -33,7 +33,7 @@ const SIGNIN_EMAILS_PER_DAY = 5;
 
 /** Magic links the whole instance may send per rolling day. `/auth/start` is
  *  anonymous, so without a ceiling anyone can point a loop at it and mail a
- *  member — or the whole roster — arbitrarily many sign-in links, on our Resend
+ *  member — or the whole roster — arbitrarily many sign-in links, on our send
  *  quota. Sized for a school: a genuine sign-in wave (a newsletter going out,
  *  back-to-school night) is dozens, not hundreds. */
 const SIGNIN_EMAILS_PER_DAY_TOTAL = 300;

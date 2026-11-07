@@ -559,8 +559,8 @@ describe("nothing here ever throws", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubGlobal("fetch", async () => new Response("bad", { status: 500 }));
     await notifySlackForAudit(testEnv(WEBHOOK), [{ action: "registration.toggled", notify: { open: true } }], META);
-    // The URL is a bearer capability to post into the channel; it is treated
-    // exactly like RESEND_API_KEY and never echoed, not even on failure.
+    // The URL is a bearer capability to post into the channel; like every
+    // secret it is never echoed, not even on failure.
     expect(err.mock.calls.flat().join(" ")).not.toContain("xxxxxxxx");
     err.mockRestore();
   });

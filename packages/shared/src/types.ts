@@ -1247,7 +1247,8 @@ export interface NewsletterAccessDTO {
 export interface NewsletterSettingsDTO {
   /** Display name on the From header. */
   senderName: string;
-  /** From address. Must be a Resend-verified sender or delivery fails. */
+  /** From address. Off the onboarded sending domain it keeps its display name
+   *  and survives as Reply-To while the address is swapped (lib/email.ts). */
   senderEmail: string;
   replyTo: string | null;
   /** The footer, as hand-written HTML. Used in the email's HTML part and on the

@@ -229,7 +229,7 @@ export function Settings() {
           </Field>
           <Field
             label="From address"
-            hint="Must be a sender Resend has verified for this domain. Leave blank to use the instance default."
+            hint="An address off the school's sending domain keeps its name but sends from the onboarded address (it stays as the reply-to). Leave blank to use the instance default."
           >
             <input className="sd-input" type="email" value={settings.senderEmail}
               placeholder="newsletter@example.school"

@@ -194,7 +194,7 @@ const CONFIRM_EMAILS_PER_DAY = 5;
  *  The per-address cap above bounds what can be done to one victim; it does
  *  nothing about the other direction, where a script walks a harvested address
  *  list and has us send one unsolicited mail per address — under the
- *  newsletter's own From identity, spending its Resend quota and its domain
+ *  newsletter's own From identity, spending its send quota and its domain
  *  reputation. This route is anonymous and the Pages Function's honeypot is
  *  bypassed by POSTing here directly, so a ceiling on the total is the only
  *  thing standing between a public form and a spam cannon.

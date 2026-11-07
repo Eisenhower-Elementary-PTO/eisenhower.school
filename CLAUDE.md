@@ -15,7 +15,8 @@ store, the PTO's site and planning boards, a lost & found, and the game-night
 bingo board.
 Cloudflare-native: React/Vite (Pages) + Hono (Workers) + D1 + R2, with
 Cloudflare email (Email Sending + Routing on `sitemail.eisenhower.school`;
-Resend as the dormant fallback channel), Nominatim geocoding, Stripe +
+no fallback channel — Resend was retired 2026-11-05, so a half-configured
+channel logs mail instead of sending it), Nominatim geocoding, Stripe +
 Printful (store), Workers AI + Vectorize (lost & found), and an optional
 Slack webhook.
 The account is on **Workers Paid** (upgraded for Email Sending, 2026-10-25).
@@ -648,7 +649,7 @@ Worker, sharing one session:
    reorder. Delivery is fire-and-forget, coalesced to ONE post per request, no
    outbox/retry/cron (a dropped message is cosmetic; a dropped audit row
    isn't). `SLACK_WEBHOOK_URL` is a secret, absent-means-off (message logged,
-   like `RESEND_API_KEY`), never logged even on failure.
+   like the unconfigured mail channel), never logged even on failure.
    **Curate by counting, not reasoning** — the first allowlist excluded
    authoring CRUD on a per-request-noise theory and would have posted ~4
    messages a month. Before narrowing on a noise argument:
@@ -1051,8 +1052,9 @@ Worker, sharing one session:
    **The budget is the other half; neither substitutes.** `enforceReadRate`
    (same file): a `[[ratelimits]]` binding at 60/min, keyed on the USER (a
    family behind one NAT must not throttle itself), admin NOT exempt (theirs
-   is the session worth stealing). Absent binding = off (the `RESEND_API_KEY`
-   contract); a throwing limiter ADMITS (refusing every read on a config slip
+   is the session worth stealing). Absent binding = off (the
+   `SLACK_WEBHOOK_URL` contract); a throwing limiter ADMITS (refusing every
+   read on a config slip
    takes the directory down). `/photos/:key` unlimited (a page fires 50 at
    once; keys are only learnable from a limited listing). **The minute window
    slows a crawl; the daily one bounds it**: `read_budget` (migration 0030)
@@ -1283,10 +1285,10 @@ pnpm dev:home     # just the apex landing page (wrangler dev) on :5176
 `pnpm dev` is `pnpm --parallel --filter "./apps/*" dev` (picks up `apps/home`
 too; `apps/redirect` has no dev script and is skipped).
 
-Magic links print to the **API console** when no outbound channel is
-configured — locally that means `RESEND_API_KEY` empty and no
-`BULK_EMAIL_FROM` var (production has both halves of the Cloudflare channel;
-lib/email.ts) — so newsletter sends print there too. Demo login:
+Magic links print to the **API console** when the outbound channel is not
+configured — locally that means no `BULK_EMAIL_FROM` var (production has both
+halves of the Cloudflare channel; lib/email.ts; there is no fallback
+channel) — so newsletter sends print there too. Demo login:
 `dana@eisenhower.edu`.
 
 `vite dev` serves only each SPA; the server-rendered public surfaces (the
@@ -1302,8 +1304,8 @@ PRODUCTION API — harmless, it only fetches the anonymous events feed; override
 it to read your local calendar.)
 
 Store vendor calls are off by default: no `PRINTFUL_API_KEY` /
-`STRIPE_SECRET_KEY` means logged, not made — same contract as
-`RESEND_API_KEY`. `STORE_SECRET` is the one exception — invariant 26.
+`STRIPE_SECRET_KEY` means logged, not made — same contract as the mail
+channel. `STORE_SECRET` is the one exception — invariant 26.
 
 ## When adding a migration
 

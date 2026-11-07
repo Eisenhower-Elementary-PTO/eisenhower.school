@@ -13,10 +13,12 @@ on it. One subdomain, three jobs:
   newsletter@sitemail.eisenhower.school` (wrangler.toml); transactional mail
   (magic links, invites, admin notifications, the intake's confirmation
   replies) keeps its own identity via the `EMAIL_FROM` secret — an address on
-  the same onboarded domain sends as itself (lib/email.ts). Resend is the
-  dormant FALLBACK, used only if the channel is ever half-unconfigured;
-  turning it back on for real means restoring Resend to `/privacy`'s
-  services list first.
+  the same onboarded domain sends as itself (lib/email.ts). There is NO
+  fallback channel: half-unconfigured means mail is logged, not sent, which
+  makes unsetting `BULK_EMAIL_FROM` the kill switch (if a newsletter fan-out
+  is mid-flight, stop it first — logged sends report accepted, so its
+  remaining rows would be marked 'sent' unmailed). Re-adopting any outside
+  mail vendor means naming it on `/privacy`'s services list first.
 
 The Worker's `email` handler does two jobs, keyed on the LOCAL PART only
 (`forwardsFor` never looks at the domain, so the same handler served the apex
@@ -155,8 +157,9 @@ accepted.
   (`include:_spf.forwardmx.net`) was replaced by Cloudflare's.
 - Outbound transactional mail rode Resend from `mailer.meandmybadself.com`
   until 2026-10-25, when all sending consolidated on Cloudflare Email
-  Sending from sitemail (`/privacy`'s email line changed with it). The
-  Resend account and its domain still exist if the fallback is ever needed.
+  Sending from sitemail (`/privacy`'s email line changed with it). Resend
+  then survived as a dormant fallback until 2026-11-05, when it was retired
+  entirely (secret deleted, code removed).
 - Testing a forward by mailing yourself from Gmail LOOKS like it failed:
   Gmail dedupes the returning copy by Message-ID; check `wrangler tail` for
   the `Email … - Ok` line instead.

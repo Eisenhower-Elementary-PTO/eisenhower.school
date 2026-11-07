@@ -1,17 +1,18 @@
 # Copy to .dev.vars (gitignored) for local development.
-# When RESEND_API_KEY is empty, the API logs magic links to the console instead of sending email.
-RESEND_API_KEY=
-# Sender address Resend is verified to send from.
+# With no EMAIL binding + BULK_EMAIL_FROM pair configured (the local default),
+# the API logs all mail — magic links included — to the console instead of
+# sending it. There is no other channel.
+# Sender address on the onboarded sending domain (production only; harmless here).
 EMAIL_FROM="Eisenhower Directory <directory@example.com>"
 # Slack Incoming Webhook for system-event notifications (invariant 22).
 # When empty — the default — the feature is off and messages are logged to the
-# console instead, the same way an empty RESEND_API_KEY logs magic links.
+# console instead, the same way unconfigured mail logs magic links.
 SLACK_WEBHOOK_URL=
 
 # ── Store (apps/store) ──────────────────────────────────────────────────────
-# All optional. Empty means the same thing an empty RESEND_API_KEY means: the
-# call is logged rather than made, and the storefront is still walkable — you
-# just can't import a real product or complete a real payment.
+# All optional. Empty means the call is logged rather than made (the same
+# absent-means-off contract as the mail channel), and the storefront is still
+# walkable — you just can't import a real product or complete a real payment.
 PRINTFUL_API_KEY=
 PRINTFUL_STORE_ID=
 STRIPE_SECRET_KEY=

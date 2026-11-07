@@ -13,8 +13,8 @@
 // Conventions borrowed from lib/geocode.ts and lib/calendar.ts: a plain `fetch`,
 // never an SDK; an explicit timeout so a hung vendor can't hold a request open;
 // a descriptive User-Agent; and an absent API key means the feature is off and
-// the call is logged instead of made, exactly as an absent RESEND_API_KEY does
-// for mail. That last one is what makes the whole store runnable in local dev.
+// the call is logged instead of made, exactly as the unconfigured mail channel
+// logs mail. That last one is what makes the whole store runnable in local dev.
 //
 // Nothing here throws. Every call returns a discriminated result and the caller
 // decides what a failure means — which matters because "Printful said no" is a

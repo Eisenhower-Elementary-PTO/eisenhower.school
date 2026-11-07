@@ -1,6 +1,8 @@
-// The budgeted, paced, resumable fan-out — written after the October 2026 send,
-// where one unpaced, unbounded run failed 69 of 94 recipients (24 Resend 429s,
-// 45 "Too many subrequests") and nothing resumed it.
+// The budgeted, paced, resumable fan-out — written after the October 2026 send
+// (then on the retired Resend channel), where one unpaced, unbounded run
+// failed 69 of 94 recipients (24 rate-limit 429s, 45 "Too many subrequests")
+// and nothing resumed it. The channel is now the Email Sending binding, so the
+// double below fails sends with the binding's E_* codes.
 //
 // What this pins, behaviourally (the fake D1 below keeps real rows and
 // evaluates each statement's own terms, invariant 22's reason):
@@ -8,8 +10,9 @@
 //   1. A run attempts at most its budget and leaves the issue 'sending' when
 //      rows remain, so the cron can carry on; it flips to 'sent' only when
 //      nothing is left pending.
-//   2. A transient refusal (429, 5xx, no verdict) leaves the row 'pending' —
-//      re-attempted automatically — while a non-429 4xx goes to 'failed' and is
+//   2. A transient refusal (the channel's meters, its internal errors) leaves
+//      the row 'pending' — re-attempted automatically — while a verdict on the
+//      request (a bad address, an unverified sender) goes to 'failed' and is
 //      NOT re-attempted by later automatic passes.
 //   3. Only 'pending' rows are scanned: a 'sent' row is never re-mailed.
 //   4. The manual retry resets failed → pending, and only after winning the
@@ -19,10 +22,10 @@
 //      duplicates), and heals one that died after its last send by flipping it
 //      to 'sent'.
 //   6. The pacing arithmetic itself: one burst of CONCURRENCY per SEND_PACE_MS
-//      stays at or under Resend's 10/s meter, and the budget stays under the
-//      free plan's 50-subrequest invocation cap with headroom.
+//      stays at or under a 10/s meter (the measured shape of the October
+//      failure), and the budget keeps the headroom it was sized with.
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Env } from "../src/env.js";
 import type { IssueRow } from "../src/lib/newsletterSend.js";
 import {
@@ -55,7 +58,7 @@ interface Fake {
   env: Env;
   issue: IssueRow;
   rows: SendRow[];
-  fetches: string[]; // recipient emails, in attempt order
+  sends: string[]; // recipient emails, in attempt order at the binding
 }
 
 function issue(over: Partial<IssueRow> = {}): IssueRow {
@@ -95,22 +98,22 @@ function sendRows(n: number, status = "pending"): SendRow[] {
   }));
 }
 
-/** Resend double: decides each attempt by recipient address. */
-function stubFetch(state: Fake, verdict: (email: string) => "ok" | "429" | "400" | "throw") {
-  globalThis.fetch = (async (_url: unknown, init?: { body?: string }) => {
-    const body = JSON.parse(init?.body ?? "{}") as { to: string };
-    state.fetches.push(body.to);
-    const v = verdict(body.to);
-    if (v === "throw") throw new Error("Too many subrequests by single Worker invocation.");
-    if (v === "ok") return new Response("{}", { status: 200 });
-    return new Response(v === "429" ? '{"name":"rate_limit_exceeded"}' : '{"name":"validation_error"}', {
-      status: v === "429" ? 429 : 400,
-    });
-  }) as typeof fetch;
+/** Binding double: decides each attempt by recipient address. */
+function stubSends(state: Fake, verdict: (email: string) => "ok" | "transient" | "permanent") {
+  (state.env as { EMAIL?: unknown }).EMAIL = {
+    async send(b: { to: string }) {
+      state.sends.push(b.to);
+      const v = verdict(b.to);
+      if (v === "ok") return { messageId: "mid" };
+      const err = new Error(v) as Error & { code: string };
+      err.code = v === "transient" ? "E_RATE_LIMIT_EXCEEDED" : "E_VALIDATION_ERROR";
+      throw err;
+    },
+  };
 }
 
 function fake(row: IssueRow, rows: SendRow[]): Fake {
-  const state: Fake = { env: null as never, issue: row, rows, fetches: [] };
+  const state: Fake = { env: null as never, issue: row, rows, sends: [] };
 
   const stmt = (sql: string) => {
     let b: unknown[] = [];
@@ -209,25 +212,20 @@ function fake(row: IssueRow, rows: SendRow[]): Fake {
 
   state.env = {
     DB: { prepare: stmt },
-    RESEND_API_KEY: "test-key",
+    BULK_EMAIL_FROM: "Eisenhower PTO <newsletter@sitemail.eisenhower.school>",
     NEWSLETTER_URL: "https://newsletter.example",
     SCHOOL_NAME: "Test School",
   } as unknown as Env;
   return state;
 }
 
-const realFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = realFetch;
-});
-
 describe("runFanOut", () => {
   it("attempts at most the budget and leaves the issue 'sending' for the cron", async () => {
     const f = fake(issue(), sendRows(7));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await runFanOut(f.env, ID, { budget: 3, paceMs: 0 });
 
-    expect(f.fetches).toHaveLength(3);
+    expect(f.sends).toHaveLength(3);
     expect(f.rows.filter((r) => r.status === "sent")).toHaveLength(3);
     expect(f.rows.filter((r) => r.status === "pending")).toHaveLength(4);
     expect(f.issue.status).toBe("sending");
@@ -235,33 +233,26 @@ describe("runFanOut", () => {
 
   it("flips to 'sent' only when nothing is left pending", async () => {
     const f = fake(issue(), sendRows(4));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await runFanOut(f.env, ID, { budget: 10, paceMs: 0 });
 
     expect(f.rows.every((r) => r.status === "sent")).toBe(true);
     expect(f.issue.status).toBe("sent");
   });
 
-  it("keeps a 429'd row 'pending' (re-attempted later), sends a 4xx row to 'failed', and still completes", async () => {
+  it("keeps a rate-limited row 'pending' (re-attempted later), sends a refused row to 'failed', and still completes", async () => {
     const f = fake(issue(), sendRows(3));
-    stubFetch(f, (email) => (email === "p0@example.com" ? "429" : email === "p1@example.com" ? "400" : "ok"));
+    stubSends(f, (email) =>
+      email === "p0@example.com" ? "transient" : email === "p1@example.com" ? "permanent" : "ok",
+    );
     await runFanOut(f.env, ID, { budget: 10, paceMs: 0 });
 
     const [rate, bad, ok] = f.rows;
     expect(rate?.status).toBe("pending");
-    expect(rate?.error).toContain("429");
+    expect(rate?.error).toContain("E_RATE_LIMIT_EXCEEDED");
     expect(bad?.status).toBe("failed");
     expect(ok?.status).toBe("sent");
     // A transient row outstanding means the run must NOT close the issue out.
-    expect(f.issue.status).toBe("sending");
-  });
-
-  it("treats a fetch that never got a verdict (the subrequest cap) as transient", async () => {
-    const f = fake(issue(), sendRows(1));
-    stubFetch(f, () => "throw");
-    await runFanOut(f.env, ID, { budget: 10, paceMs: 0 });
-
-    expect(f.rows[0]?.status).toBe("pending");
     expect(f.issue.status).toBe("sending");
   });
 
@@ -269,21 +260,21 @@ describe("runFanOut", () => {
     const rows = sendRows(3);
     rows[0]!.status = "sent";
     const f = fake(issue(), rows);
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await runFanOut(f.env, ID, { budget: 10, paceMs: 0 });
 
-    expect(f.fetches).not.toContain("p0@example.com");
-    expect(f.fetches).toHaveLength(2);
+    expect(f.sends).not.toContain("p0@example.com");
+    expect(f.sends).toHaveLength(2);
   });
 
   it("leaves 'failed' rows alone — only the manual retry re-enters them", async () => {
     const rows = sendRows(2);
     rows[0]!.status = "failed";
     const f = fake(issue(), rows);
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await runFanOut(f.env, ID, { budget: 10, paceMs: 0 });
 
-    expect(f.fetches).toEqual(["p1@example.com"]);
+    expect(f.sends).toEqual(["p1@example.com"]);
     expect(f.rows[0]?.status).toBe("failed");
     expect(f.issue.status).toBe("sent"); // nothing pending; the failure waits for a human
   });
@@ -312,28 +303,28 @@ describe("retryFailed", () => {
 describe("resumePendingSends", () => {
   it("claims a stale 'sending' issue and drains it", async () => {
     const f = fake(issue({ updated_at: STALE }), sendRows(2));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await resumePendingSends(f.env);
 
-    expect(f.fetches).toHaveLength(2);
+    expect(f.sends).toHaveLength(2);
     expect(f.issue.status).toBe("sent");
   });
 
   it("leaves a FRESH 'sending' issue alone — a live run may still be mailing it", async () => {
     const f = fake(issue({ updated_at: new Date().toISOString() }), sendRows(2));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await resumePendingSends(f.env);
 
-    expect(f.fetches).toHaveLength(0);
+    expect(f.sends).toHaveLength(0);
     expect(f.issue.status).toBe("sending");
   });
 
   it("heals a run that died after its last send by closing the issue out", async () => {
     const f = fake(issue({ updated_at: STALE }), sendRows(2, "sent"));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await resumePendingSends(f.env);
 
-    expect(f.fetches).toHaveLength(0);
+    expect(f.sends).toHaveLength(0);
     expect(f.issue.status).toBe("sent");
   });
 
@@ -341,40 +332,40 @@ describe("resumePendingSends", () => {
     // Send began in 2000 (sent_at), far past the 24h give-up; rows are still
     // pending because every pass found only transient refusals.
     const f = fake(issue({ updated_at: STALE, sent_at: "2000-01-01T00:00:00.000Z" }), sendRows(3));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await resumePendingSends(f.env);
 
-    expect(f.fetches).toHaveLength(0);
+    expect(f.sends).toHaveLength(0);
     expect(f.rows.every((r) => r.status === "failed")).toBe(true);
     expect(f.issue.status).toBe("sent");
   });
 
   it("keeps trying while the send is younger than the give-up window", async () => {
     const f = fake(issue({ updated_at: STALE, sent_at: new Date().toISOString() }), sendRows(2));
-    stubFetch(f, () => "ok");
+    stubSends(f, () => "ok");
     await resumePendingSends(f.env);
 
-    expect(f.fetches).toHaveLength(2);
+    expect(f.sends).toHaveLength(2);
     expect(f.issue.status).toBe("sent");
   });
 
   it("never touches a 'sent' or 'draft' issue", async () => {
     for (const status of ["sent", "draft"] as const) {
       const f = fake(issue({ status, updated_at: STALE }), sendRows(2));
-      stubFetch(f, () => "ok");
+      stubSends(f, () => "ok");
       await resumePendingSends(f.env);
-      expect(f.fetches).toHaveLength(0);
+      expect(f.sends).toHaveLength(0);
       expect(f.issue.status).toBe(status);
     }
   });
 });
 
 describe("the limits themselves", () => {
-  it("one burst per pace window stays at or under Resend's 10/s meter", () => {
+  it("one burst per pace window stays at or under a 10/s meter", () => {
     expect((CONCURRENCY * 1000) / SEND_PACE_MS).toBeLessThanOrEqual(10);
   });
 
-  it("the budget stays under the free plan's 50-subrequest invocation cap, with headroom", () => {
+  it("the budget keeps the headroom it was sized with (the free plan's old 50-subrequest cap)", () => {
     expect(SEND_BUDGET).toBeLessThanOrEqual(45);
     expect(SEND_BUDGET).toBeGreaterThan(0);
   });

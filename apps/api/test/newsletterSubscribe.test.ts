@@ -181,7 +181,15 @@ const ENV = {
   SCHOOL_TIMEZONE: "America/Chicago",
   NEWSLETTER_URL: "https://newsletter.eisenhower.school",
   CALENDAR_URL: "https://calendar.eisenhower.school",
-  RESEND_API_KEY: "re_test",
+  BULK_EMAIL_FROM: "Eisenhower PTO <newsletter@sitemail.eisenhower.school>",
+  // The outbound channel, captured below. Reads `sent` at call time, so each
+  // test's beforeEach reset is seen.
+  EMAIL: {
+    async send(b: { to: string; subject: string; text: string; html: string }) {
+      sent.push({ to: b.to, subject: b.subject, text: b.text, html: b.html });
+      return { messageId: "mid" };
+    },
+  },
 } as const;
 
 // Both the confirmation mail and the admin notification are fired through
@@ -202,17 +210,15 @@ async function drain(): Promise<void> {
   }
 }
 
-/** Outbound mail, captured at the Resend boundary. */
+/** Outbound mail, captured at the EMAIL binding. */
 let sent: { to: string; subject: string; text: string; html: string }[] = [];
 
 beforeEach(() => {
   sent = [];
   pending = [];
-  vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
-    if (String(url).includes("api.resend.com")) {
-      sent.push(JSON.parse(String(init.body)));
-      return new Response("{}", { status: 200 });
-    }
+  // Mail rides the binding, so any fetch at all is a route doing something
+  // unexpected.
+  vi.stubGlobal("fetch", async (url: string) => {
     throw new Error(`unexpected fetch: ${url}`);
   });
 });

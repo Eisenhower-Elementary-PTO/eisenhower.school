@@ -671,7 +671,7 @@ describe("the read budget", () => {
     ).rejects.toBeInstanceOf(RateLimitedError);
   });
 
-  it("is OFF when the binding is absent, like an absent RESEND_API_KEY", async () => {
+  it("is OFF when the binding is absent, like an absent SLACK_WEBHOOK_URL", async () => {
     // Tests and local dev bind no limiter. The direction of this default is
     // deliberate: an unbound limiter admits what it would have refused, which
     // is today's posture; refusing everything would take the directory down on

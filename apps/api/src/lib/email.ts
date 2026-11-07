@@ -1,10 +1,12 @@
-// Email delivery. One channel once it is fully configured: the Cloudflare
-// Email Sending binding (`EMAIL` + `BULK_EMAIL_FROM`, both halves set only in
-// production) carries ALL outbound mail from the app's sending domain,
-// sitemail.eisenhower.school. Resend (`RESEND_API_KEY`) survives as the
-// fallback while the channel is half-configured — the transition contract —
-// and with neither configured (local dev, vitest) the message is logged to
-// the console so the magic link is still reachable.
+// Email delivery. One channel: the Cloudflare Email Sending binding
+// (`EMAIL` + `BULK_EMAIL_FROM`, both halves set only in production) carries
+// ALL outbound mail from the app's sending domain,
+// sitemail.eisenhower.school. With either half absent (local dev, vitest) the
+// message is logged to the console so the magic link is still reachable —
+// which also makes unsetting BULK_EMAIL_FROM the production kill switch: mail
+// STOPS (logged, reported as accepted) rather than falling back anywhere.
+// Resend, the original channel and then the fallback, was retired entirely
+// on 2026-11-05 (secret deleted; this file stopped knowing how to call it).
 
 import { escapeHtml } from "@sd/shared";
 import type { Env } from "../env.js";
@@ -28,62 +30,6 @@ export interface SendResult {
   error?: string;
 }
 
-/** Send one message and report whether it was accepted.
- *
- *  `sendEmail` below keeps the never-throw, never-report contract that the auth
- *  paths depend on. This variant exists for the newsletter, which mails hundreds
- *  of recipients at once and has to record per-recipient outcomes — "we tried
- *  and Resend rejected it" and "we tried and it went through" are different
- *  facts there, and collapsing them would make a partial send unrecoverable. */
-/** One Resend message as the API takes it — the single place the From fallback
- *  chain and the reply_to spelling live, shared by the single and batch sends
- *  so the two can't drift. */
-function resendPayload(env: Env, msg: SendArgs) {
-  return {
-    from: msg.from ?? env.EMAIL_FROM ?? `${env.SCHOOL_NAME} Directory <onboarding@resend.dev>`,
-    to: msg.to,
-    subject: msg.subject,
-    html: msg.html,
-    text: msg.text,
-    ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
-    ...(msg.headers ? { headers: msg.headers } : {}),
-  };
-}
-
-/** A Workers fetch has no default timeout, so one hung Resend call would stall
- *  a whole paced run — and the fan-out's resume logic reasons about how long a
- *  live run can go quiet, which only works if a burst is BOUNDED. Ten seconds
- *  is an eternity for this API; a send that slow is one worth failing
- *  (`isTransientSendError` classes an abort as retryable). */
-const RESEND_TIMEOUT_MS = 10_000;
-
-/** POST one body to Resend and shape the outcome the way every caller — and
- *  `isTransientSendError` — expects: "NNN: body" for a verdict, the bare
- *  message for a failure that never got one. */
-async function postResend(env: Env, path: string, body: unknown): Promise<SendResult> {
-  try {
-    const res = await fetch(`https://api.resend.com${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`[email] Resend error ${res.status} on ${path}: ${text}`);
-      return { ok: false, error: `${res.status}: ${text.slice(0, 200)}` };
-    }
-    return { ok: true };
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    console.error(`[email] send failed on ${path}: ${error}`);
-    return { ok: false, error: error.slice(0, 200) };
-  }
-}
-
 /** The Cloudflare binding's error codes worth re-trying: the service's own
  *  meters and transient failures. Everything else (validation, an unverified
  *  sender, a suppressed recipient) would earn the same answer forever. */
@@ -94,19 +40,15 @@ const CF_TRANSIENT_CODES = new Set([
   "E_INTERNAL_SERVER_ERROR",
 ]);
 
-/** Whether a failed send is worth re-trying without a human. A 429, a 5xx and
- *  a no-verdict failure (a network error, a timeout, the subrequest cap) all
- *  pass — retrying is exactly what the per-second meter and the daily quota
- *  expect. A 4xx other than 429 is Resend judging the REQUEST (a malformed
- *  address, a rejected sender): re-sending the same thing would earn the same
- *  answer forever. Cloudflare-channel errors carry their `E_*` code instead of
- *  a status and are judged by `CF_TRANSIENT_CODES`. */
+/** Whether a failed send is worth re-trying without a human. Channel errors
+ *  carry their `E_*` code and are judged by `CF_TRANSIENT_CODES` — retrying a
+ *  meter or a 5xx is exactly what those expect, while a verdict on the REQUEST
+ *  itself (a malformed address, an unverified sender, a suppressed recipient)
+ *  would earn the same answer forever. A failure with no code at all never
+ *  reached the channel's judgement, so it passes too. */
 export function isTransientSendError(error: string): boolean {
   if (error.startsWith("E_")) return CF_TRANSIENT_CODES.has(error.split(":")[0]!);
-  const m = /^(\d{3}):/.exec(error);
-  if (!m) return true;
-  const status = Number(m[1]);
-  return status === 429 || status >= 500;
+  return true;
 }
 
 /** "Name <addr>" (or a bare address) → the binding's {name, email} shape. */
@@ -123,7 +65,9 @@ function addressDomain(email: string): string {
 /** Both halves of the Cloudflare channel configured — the binding carries ALL
  *  outbound mail. Keyed on BULK_EMAIL_FROM because its domain must be
  *  onboarded to Email Sending before the first send, and unsetting the var is
- *  the kill switch back to Resend. */
+ *  the kill switch: with it gone, every send logs to the console and reports
+ *  accepted (so if a newsletter fan-out is mid-flight, stop THAT first — its
+ *  remaining rows would be marked 'sent' unmailed; see newsletterSend.ts). */
 export function bindingChannelOn(env: Env): boolean {
   return Boolean(env.EMAIL && env.BULK_EMAIL_FROM);
 }
@@ -163,40 +107,48 @@ async function sendViaBinding(env: Env, msg: SendArgs): Promise<SendResult> {
   }
 }
 
+/** Send one message and report whether it was accepted.
+ *
+ *  `sendEmail` below keeps the never-throw, never-report contract that the
+ *  auth paths depend on. This variant exists for the newsletter, which mails
+ *  hundreds of recipients at once and has to record per-recipient outcomes —
+ *  "we tried and the channel rejected it" and "we tried and it went through"
+ *  are different facts there, and collapsing them would make a partial send
+ *  unrecoverable. */
 export async function sendEmailResult(env: Env, msg: SendArgs): Promise<SendResult> {
   // ALL mail takes the Cloudflare channel when it is configured; both halves
   // absent-means-off, so vitest and a bare `wrangler dev` (where the binding
-  // exists but the top-level vars set no BULK_EMAIL_FROM) fall through
-  // unchanged — Resend with a key, else the console log below.
+  // exists but the top-level vars set no BULK_EMAIL_FROM) fall through to the
+  // console log below.
   if (bindingChannelOn(env)) return sendViaBinding(env, msg);
-  if (!env.RESEND_API_KEY) {
-    // Local/dev fallback — surface the content (incl. magic link) in logs.
-    console.log(
-      `\n[email:dev] to=${msg.to} subject="${msg.subject}"\n${msg.text}\n`,
-    );
-    return { ok: true };
-  }
-  return postResend(env, "/emails", resendPayload(env, msg));
+  // Channel off — surface the content (incl. magic link) in logs.
+  console.log(
+    `\n[email:dev] to=${msg.to} subject="${msg.subject}"\n${msg.text}\n`,
+  );
+  return { ok: true };
 }
 
-/** Pause between calls for anything that mails in bulk. Resend meters API
- *  requests PER SECOND (this account: 10/s; new accounts: 2/s), and the
- *  October 2026 newsletter send is the proof it matters: unpaced bursts of 5
- *  pushed 25 emails through in 2.3 seconds and the next 24 came back 429.
- *  One burst of at most a handful of calls per RESEND_PACE_MS stays under
- *  this account's meter with margin. */
-export const RESEND_PACE_MS = 1100;
+/** Pause between calls for anything that mails in bulk. Email providers meter
+ *  per SECOND, and the October 2026 newsletter send (then on Resend, metered
+ *  at 10/s) is the proof it matters: unpaced bursts of 5 pushed 25 emails
+ *  through in 2.3 seconds and the next 24 came back 429. The Cloudflare
+ *  channel has meters of its own (E_RATE_LIMIT_EXCEEDED /
+ *  E_DAILY_LIMIT_EXCEEDED), so the proven pace stays: one burst of at most a
+ *  handful of calls per EMAIL_PACE_MS. */
+export const EMAIL_PACE_MS = 1100;
 
-/** Resend's batch endpoint takes up to this many messages per call. */
-export const BATCH_API_MAX = 100;
+/** Messages one sendEmailBatchResult call accepts — the chunk unit for bulk
+ *  callers (the volunteer reminders slice by it). Inherited from the retired
+ *  Resend batch endpoint's limit; still a sane bound on one paced unit. */
+export const BATCH_MAX = 100;
 
 export interface BatchSendResult extends SendResult {
-  /** Per-message outcomes, same order as the input. Present only when the
-   *  Cloudflare channel sent the messages individually (the binding has no
+  /** Per-message outcomes, same order as the input. Present whenever the
+   *  Cloudflare channel sent the messages (individually — the binding has no
    *  batch endpoint); `ok` is then true iff EVERY message was accepted, and a
-   *  caller that sees this field must not retry the whole batch — the
-   *  accepted messages are already in recipients' inboxes. Absent on the
-   *  all-or-nothing Resend batch call. */
+   *  caller must never retry the whole batch — the accepted messages are
+   *  already in recipients' inboxes. Absent only when the channel is off and
+   *  the messages were logged instead. */
   results?: SendResult[];
 }
 
@@ -204,22 +156,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Send several messages in one call to this seam.
- *
- *  On the Cloudflare channel each message is its own `send()` (paced by
- *  `paceMs`, one transient retry apiece), reported per message in `results`.
- *
- *  On Resend it is ONE /emails/batch call — one subrequest, one unit against
- *  the per-second meter. That mattered on the Workers free plan, where an
- *  invocation gets 50 subrequests and mailing a roster-sized import one fetch
- *  per address dies mid-list the way the October 2026 newsletter send did.
- *  The trade: the batch is accepted or refused as a WHOLE (Resend documents
- *  no partial-success mode), so the caller learns no per-recipient outcomes
- *  and falls back to budgeted single sends when a batch is refused. */
+/** Send several messages in one call to this seam: each message is its own
+ *  `send()` on the binding (paced by `paceMs`, one transient retry apiece),
+ *  reported per message in `results`. Exists so bulk callers share one pacing
+ *  and retry shape instead of each growing its own. */
 export async function sendEmailBatchResult(env: Env, msgs: SendArgs[], paceMs = 0): Promise<BatchSendResult> {
   if (msgs.length === 0) return { ok: true };
-  if (msgs.length > BATCH_API_MAX) {
-    return { ok: false, error: `batch of ${msgs.length} exceeds the API limit of ${BATCH_API_MAX}` };
+  if (msgs.length > BATCH_MAX) {
+    return { ok: false, error: `batch of ${msgs.length} exceeds the limit of ${BATCH_MAX}` };
   }
   if (bindingChannelOn(env)) {
     const results: SendResult[] = [];
@@ -239,13 +183,10 @@ export async function sendEmailBatchResult(env: Env, msgs: SendArgs[], paceMs = 
       results,
     };
   }
-  if (!env.RESEND_API_KEY) {
-    for (const msg of msgs) {
-      console.log(`\n[email:dev] to=${msg.to} subject="${msg.subject}"\n${msg.text}\n`);
-    }
-    return { ok: true };
+  for (const msg of msgs) {
+    console.log(`\n[email:dev] to=${msg.to} subject="${msg.subject}"\n${msg.text}\n`);
   }
-  return postResend(env, "/emails/batch", msgs.map((msg) => resendPayload(env, msg)));
+  return { ok: true };
 }
 
 export async function sendEmail(env: Env, msg: SendArgs): Promise<void> {

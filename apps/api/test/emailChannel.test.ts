@@ -3,7 +3,8 @@
 // already on the onboarded sending domain sends as itself (transactional mail
 // keeps its own identity); any other asked-for sender keeps its display name
 // while its address is swapped for the onboarded one and survives as Reply-To.
-// Resend remains the fallback while the channel is half-configured.
+// With the channel half-configured, mail is logged to the console instead —
+// there is no fallback channel (Resend was retired 2026-11-05).
 
 import { describe, expect, it } from "vitest";
 import type { HonoEnv } from "../src/env.js";
@@ -91,8 +92,8 @@ describe("sendEmailResult channel routing", () => {
       { EMAIL: binding }, // binding, no From — domain not onboarded yet
       { BULK_EMAIL_FROM: BULK_FROM }, // From, no binding
     ]) {
-      // No RESEND_API_KEY either → the fallback logs instead of fetching, so
-      // the assertion that matters is that the BINDING saw nothing.
+      // Half-configured → the message is logged, reported accepted, and the
+      // assertion that matters is that the BINDING saw nothing.
       const r = await sendEmailResult(env as unknown as Bindings, msg());
       expect(r.ok).toBe(true);
     }
@@ -141,7 +142,7 @@ describe("sendEmailBatchResult on the binding", () => {
   });
 });
 
-describe("isTransientSendError knows both channels", () => {
+describe("isTransientSendError", () => {
   it("judges Cloudflare codes by the transient set", () => {
     expect(isTransientSendError("E_RATE_LIMIT_EXCEEDED: slow down")).toBe(true);
     expect(isTransientSendError("E_DAILY_LIMIT_EXCEEDED: tomorrow")).toBe(true);
@@ -153,10 +154,8 @@ describe("isTransientSendError knows both channels", () => {
     expect(isTransientSendError("E_VALIDATION_ERROR: bad address")).toBe(false);
   });
 
-  it("still judges Resend statuses the old way", () => {
-    expect(isTransientSendError("429: too many")).toBe(true);
-    expect(isTransientSendError("500: boom")).toBe(true);
-    expect(isTransientSendError("422: bad request")).toBe(false);
+  it("treats a failure with no verdict code as transient — it never reached the channel's judgement", () => {
     expect(isTransientSendError("network timeout")).toBe(true);
+    expect(isTransientSendError("unknown")).toBe(true);
   });
 });

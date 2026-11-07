@@ -28,7 +28,7 @@ export interface SlackSendResult {
 /** Post one message to the configured channel. Never throws.
  *
  *  The webhook URL is a bearer capability — anyone holding it can post into the
- *  channel — so it is treated like RESEND_API_KEY and never logged, not even on
+ *  channel — so like every other secret it is never logged, not even on
  *  the error paths below. Only the response body is echoed, truncated. */
 export async function postToSlack(env: Env, msg: SlackMessage): Promise<SlackSendResult> {
   if (!env.SLACK_WEBHOOK_URL) {

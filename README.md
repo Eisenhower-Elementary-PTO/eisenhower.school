@@ -78,7 +78,7 @@ React SPA (Pages)  ──fetch (JSON, session cookie)──▶  Hono API (Worker
   cache-first service worker (apps/web)                │  session + audit middleware
                                                        ├─ D1 (SQL)
 Pages Functions ───────────────────────────────────────┤  ├─ R2 (member photos; newsletter media, separately)
-  newsletter archive, storefront                       ├─ CF Email Sending (email; Resend fallback)
+  newsletter archive, storefront                       ├─ CF Email Sending (all email; no fallback)
                                                        ├─ Nominatim (geocode, server-only)
 apps/home (Worker) ────────────────────────────────────┘  ├─ Stripe + Printful (store)
   one subrequest: the public agenda                       └─ Slack (optional, system events)
@@ -159,7 +159,7 @@ its schema joins `person`.
 ```bash
 pnpm install
 
-# API: copy local secrets template (magic links print to the console if no Resend key)
+# API: copy local secrets template (magic links print to the console locally — no mail channel)
 cp apps/api/.dev.vars.example apps/api/.dev.vars
 
 # Create the local D1 database + apply migrations, then seed demo data
@@ -172,8 +172,9 @@ pnpm dev
 ```
 
 Then open <http://localhost:5173>, enter `dana@eisenhower.edu`, and **read the
-API terminal** — the magic-link URL is printed there (no email is sent without a
-Resend key). Click it to land in the directory. Every app shares that session,
+API terminal** — the magic-link URL is printed there (local dev configures no
+mail channel, so nothing is sent). Click it to land in the directory. Every app
+shares that session,
 and signing in from one returns you there (each sends its own origin as
 `returnTo`).
 
@@ -183,10 +184,10 @@ Two things local dev does not give you:
   archive (`/`, `/n/:slug`) and the storefront (`/`, `/p/:slug`, `/o/:token`)
   exist in `wrangler pages dev` and in production, not in `pnpm dev`. You get the
   cart and both admins, and a note where the shop would be.
-- **Third-party calls.** With `RESEND_API_KEY`, `SLACK_WEBHOOK_URL`,
-  `PRINTFUL_API_KEY` or `STRIPE_SECRET_KEY` empty, the call is logged rather than
-  made — which also means a newsletter send prints to the API console instead of
-  mailing anyone. `STORE_SECRET` is the one exception: it may only be empty while
+- **Third-party calls.** With `SLACK_WEBHOOK_URL`, `PRINTFUL_API_KEY` or
+  `STRIPE_SECRET_KEY` empty — and no `EMAIL` + `BULK_EMAIL_FROM` pair — the
+  call is logged rather than made, which also means a newsletter send prints to
+  the API console instead of mailing anyone. `STORE_SECRET` is the one exception: it may only be empty while
   `STRIPE_SECRET_KEY` is too, because a guessable quote key is a guessable price.
 
 ## Useful scripts
@@ -225,7 +226,6 @@ wrangler r2 bucket create school-directory-photos
 wrangler r2 bucket create school-directory-newsletter-media
 
 # Secrets (production)
-wrangler secret put RESEND_API_KEY --env production
 wrangler secret put EMAIL_FROM --env production
 wrangler secret put SLACK_WEBHOOK_URL --env production        # optional
 wrangler secret put STORE_SECRET --env production             # store; see below

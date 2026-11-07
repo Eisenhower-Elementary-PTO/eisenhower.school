@@ -36,8 +36,8 @@ import { notifySlackForAudit } from "./slackNotify.js";
 import {
   sendEmailBatchResult,
   volunteerReminderEmail,
-  BATCH_API_MAX,
-  RESEND_PACE_MS,
+  BATCH_MAX,
+  EMAIL_PACE_MS,
   type SendArgs,
   type VolunteerReminderShift,
 } from "./email.js";
@@ -270,11 +270,11 @@ async function remindSheet(env: Env, row: CandidateRow, timeZone: string): Promi
   }));
 
   let accepted = 0;
-  for (let i = 0; i < msgs.length; i += BATCH_API_MAX) {
-    const chunk = msgs.slice(i, i + BATCH_API_MAX);
-    const res = await sendEmailBatchResult(env, chunk, RESEND_PACE_MS);
-    // The Cloudflare channel reports per message; the Resend batch is
-    // all-or-nothing and reports no `results`.
+  for (let i = 0; i < msgs.length; i += BATCH_MAX) {
+    const chunk = msgs.slice(i, i + BATCH_MAX);
+    const res = await sendEmailBatchResult(env, chunk, EMAIL_PACE_MS);
+    // The channel reports per message; the dev console log reports none and
+    // always accepts.
     accepted += res.results ? res.results.filter((r) => r.ok).length : res.ok ? chunk.length : 0;
   }
 

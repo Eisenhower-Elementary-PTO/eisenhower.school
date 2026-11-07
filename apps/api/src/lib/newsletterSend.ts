@@ -11,22 +11,23 @@
 //   ordering that actually closes the race.
 //
 //   Resumability. Every recipient gets a 'pending' newsletter_send row before
-//   any mail is attempted. A fan-out cut short — a recycled Worker, a Resend
+//   any mail is attempted. A fan-out cut short — a recycled Worker, a channel
 //   outage — therefore leaves a state that can be read and resumed rather than
 //   one nobody can interpret. Since the October 2026 send (69 of 94 recipients
-//   failed in one unpaced, unbounded blast), resuming is also the NORMAL path,
-//   not only recovery: each run is budgeted under the per-invocation
-//   subrequest cap and paced under Resend's per-second meter,
-//   and `resumePendingSends` (riding the store's 15-minute cron) carries a
-//   yielded or killed run forward. A run processes 'pending' rows only;
-//   'failed' means Resend gave a verdict re-sending can't change, and only the
-//   manual retry route (which resets failed -> pending) re-enters those.
+//   failed in one unpaced, unbounded blast, on the then-Resend channel),
+//   resuming is also the NORMAL path, not only recovery: each run is budgeted
+//   under the per-invocation subrequest cap and paced under the channel's
+//   per-second meter, and `resumePendingSends` (riding the store's 15-minute
+//   cron) carries a yielded or killed run forward. A run processes 'pending'
+//   rows only; 'failed' means the channel gave a verdict re-sending can't
+//   change, and only the manual retry route (which resets failed -> pending)
+//   re-enters those.
 
 import type { Env } from "../env.js";
 import { ulid } from "./ids.js";
 import { nowIso, sleep } from "./time.js";
 import { randomToken } from "./crypto.js";
-import { RESEND_PACE_MS, isTransientSendError, sendEmailResult } from "./email.js";
+import { EMAIL_PACE_MS, isTransientSendError, sendEmailResult } from "./email.js";
 import {
   getNewsletterSettings,
   issueEmailArgs,
@@ -39,12 +40,12 @@ import type { NewsletterNode } from "@sd/shared";
 export const CONCURRENCY = 5;
 
 /** Pause between bursts — one burst of CONCURRENCY per SEND_PACE_MS. The meter
- *  it answers to is documented at RESEND_PACE_MS (lib/email.ts); on an account
- *  metered slower than ours the 429s are handled anyway, because a 429'd row
- *  stays 'pending' and is re-attempted on a later pass. */
-export const SEND_PACE_MS = RESEND_PACE_MS;
+ *  it answers to is documented at EMAIL_PACE_MS (lib/email.ts); on a channel
+ *  metered slower than ours the refusals are handled anyway, because a
+ *  rate-limited row stays 'pending' and is re-attempted on a later pass. */
+export const SEND_PACE_MS = EMAIL_PACE_MS;
 
-/** Resend attempts one invocation may make. Sized when the account ran on the
+/** Send attempts one invocation may make. Sized when the account ran on the
  *  Workers FREE plan, which caps SUBREQUESTS per invocation at 50 — the same
  *  October send hit it: attempt ~50 onward failed with "Too many subrequests"
  *  before any fetch was made. The account has since moved to PAID (cap 1000 —
@@ -67,7 +68,7 @@ export const SEND_BUDGET = 40;
 /** The budget for the pass a ROUTE starts. A request's waitUntil is killed
  *  roughly 30 seconds after the response, and this run deliberately sleeps
  *  between bursts — a full SEND_BUDGET pass can brush that wall, and a run
- *  killed between a successful Resend call and its ledger write leaves a
+ *  killed between a successful send and its ledger write leaves a
  *  delivered row 'pending', which the resumer would then MAIL AGAIN. So the
  *  inline pass stays small enough to finish with lots of margin (three sleeps
  *  plus twenty bounded fetches), and the cron passes — which run in a
@@ -215,11 +216,12 @@ async function recordOutcome(
   sendId: string,
   result: { ok: boolean; error?: string },
 ): Promise<void> {
-  // Three outcomes, not two. A transient refusal — the per-second meter, a
-  // Resend 5xx, a fetch that never got a verdict — leaves the row 'pending'
-  // with the error recorded, so a later pass re-attempts it without anyone
-  // pressing retry. Only a verdict on the REQUEST itself (a non-429 4xx)
-  // is 'failed', which the automatic passes leave alone.
+  // Three outcomes, not two. A transient refusal — the channel's meters, its
+  // internal errors, a failure that never got a verdict — leaves the row
+  // 'pending' with the error recorded, so a later pass re-attempts it without
+  // anyone pressing retry. Only a verdict on the REQUEST itself (a bad
+  // address, an unverified sender) is 'failed', which the automatic passes
+  // leave alone.
   const error = result.ok ? null : (result.error ?? "unknown");
   const status = result.ok ? "sent" : isTransientSendError(error ?? "") ? "pending" : "failed";
   const write = () =>
@@ -247,8 +249,8 @@ export interface FanOutOptions {
   paceMs?: number;
 }
 
-/** Mail up to SEND_BUDGET 'pending' recipients, paced under Resend's meter,
- *  then close the issue out IF nothing is left pending. Never throws — it runs
+/** Mail up to SEND_BUDGET 'pending' recipients, paced under the channel's
+ *  meter, then close the issue out IF nothing is left pending. Never throws — it runs
  *  detached in waitUntil, where a rejection would just be logged by the runtime
  *  and lose the per-recipient detail this records instead.
  *
@@ -281,8 +283,8 @@ export async function runFanOut(env: Env, issueId: string, opts: FanOutOptions =
       .all<PendingRow>();
 
     for (let i = 0; i < pending.results.length; i += CONCURRENCY) {
-      // The pause goes BETWEEN bursts: Resend counts per second, so the shape
-      // that matters is "never more than CONCURRENCY in any SEND_PACE_MS".
+      // The pause goes BETWEEN bursts: the meter counts per second, so the
+      // shape that matters is "never more than CONCURRENCY in any SEND_PACE_MS".
       if (i > 0 && paceMs > 0) await sleep(paceMs);
       const chunk = pending.results.slice(i, i + CONCURRENCY);
       await Promise.all(
@@ -397,15 +399,14 @@ export async function retryFailed(env: Env, issueId: string): Promise<boolean> {
  *  only thing a staleness window protects against is claiming a run that is
  *  still LIVE (two runs over one ledger mail duplicates, the one unrecoverable
  *  outcome this file has), and a live run heartbeats every burst — at most
- *  ~RESEND_TIMEOUT_MS + SEND_PACE_MS apart, since every Resend fetch is
- *  timeout-bounded (lib/email.ts). Five minutes is ~25x that worst gap, and it
+ *  ~SEND_PACE_MS plus one send apart. Five minutes is ~25x that worst gap, and it
  *  halves the drain time of a big audience versus waiting out the manual
  *  window: a yielded run becomes claimable before the NEXT tick rather than
  *  the one after. */
 const RESUME_STALE_MS = 5 * 60 * 1000;
 
 /** When the automatic passes stop believing a transient error. A recipient
- *  Resend persistently 5xx's — or an outage that outlives this — would
+ *  the channel persistently refuses — or an outage that outlives this — would
  *  otherwise hold the issue in 'sending' forever: un-editable, un-deletable,
  *  unpublish refused, re-attempted every tick with nothing telling anyone.
  *  A day of retries every 15 minutes is ~96 attempts; after that the rows are

@@ -75,7 +75,7 @@ export interface Env {
   // secrets (may be empty in local dev)
   /**
    * Rate limiter for the reads that serve one family's data to another
-   * (invariant 32). Optional in the same sense `RESEND_API_KEY` is: absent
+   * (invariant 32). Optional in the same sense `SLACK_WEBHOOK_URL` is: absent
    * means the feature is off rather than the request failing, so `vitest` and
    * a bare `wrangler dev` need no binding and every route behaves as it did.
    *
@@ -93,9 +93,9 @@ export interface Env {
   EMAIL_FORWARDS?: string;
   /** Cloudflare Email Sending (Workers Paid) — the outbound channel for ALL
    *  mail once BULK_EMAIL_FROM is also set (lib/email.ts). Optional in the
-   *  absent-means-off sense: without either half, every message rides Resend
-   *  as before (or the console, with no Resend key — local dev's magic
-   *  links). */
+   *  absent-means-off sense: without either half, every message goes to the
+   *  console instead — local dev's magic links, and production's kill switch
+   *  (there is no fallback channel; Resend was retired 2026-11-05). */
   EMAIL?: SendEmail;
   /** The default From identity for mail sent through the EMAIL binding, e.g.
    *  "Eisenhower PTO <newsletter@sitemail.eisenhower.school>". Its DOMAIN
@@ -106,25 +106,19 @@ export interface Env {
    *  for a From on that same domain (EMAIL_FROM) sends as itself; any other
    *  asked-for sender keeps its display name and survives as Reply-To. */
   BULK_EMAIL_FROM?: string;
-  /** Resend — the FALLBACK channel while the Cloudflare one is
-   *  half-configured. Dormant in production since app mail consolidated on
-   *  the binding (2026-10-25); unsetting BULK_EMAIL_FROM falls back here. */
-  RESEND_API_KEY?: string;
   /** The transactional From identity (magic links, invites, notifications),
    *  e.g. "Eisenhower PTO Directory <directory@sitemail.eisenhower.school>".
-   *  On the Cloudflare channel its domain must be the onboarded one or it is
-   *  demoted to Reply-To; on the Resend fallback it must be a
-   *  Resend-verified sender. */
+   *  Its domain must be the onboarded one or it is demoted to Reply-To. */
   EMAIL_FROM?: string;
   /** Slack Incoming Webhook posting system events to the admins' channel
    *  (invariant 22). Absent — the default, and the case in local dev — turns
    *  the feature off entirely and logs the message instead, exactly as an
-   *  absent RESEND_API_KEY does for mail. The value is a bearer capability to
+   *  unconfigured mail channel does. The value is a bearer capability to
    *  post into that channel, so it lives here as a secret and is never logged. */
   SLACK_WEBHOOK_URL?: string;
   /** Printful v1 API key, and the store it acts on. Absent — the default, and
    *  the case in local dev — turns the catalog and fulfilment calls off and
-   *  logs them instead, exactly as an absent RESEND_API_KEY does for mail, so
+   *  logs them instead, exactly as an unconfigured mail channel does, so
    *  the whole storefront is still walkable without a Printful account.
    *
    *  Both are expected to CHANGE ONCE: this instance starts against a personal

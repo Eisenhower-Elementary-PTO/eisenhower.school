@@ -66,7 +66,7 @@ function sheetUrl(sheet: VolunteerSheetDTO): string {
  *
  *  Nothing is sent from here — this only opens a composer, so what actually goes
  *  out is still the admin's to write and to send. That is the whole reason this
- *  is a `mailto:` and not a route: the API has a mailer (Resend), and using it
+ *  is a `mailto:` and not a route: the API has a mailer, and using it
  *  would make the PTO's own outbound mail a thing this system logs, retries and
  *  is blamed for.
  *
