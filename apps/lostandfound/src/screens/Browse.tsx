@@ -81,6 +81,16 @@ export function Browse() {
         <div>
           <h1 className="sd-h1">{t("lfBrowseTitle")}</h1>
           <p className="sd-lead" style={{ marginTop: 8 }}>{t("lfBrowseLead")}</p>
+          <p className="sd-meta" style={{ marginTop: 6 }}>
+            <a
+              className="sd-link"
+              href="https://www.amazon.com/Avery-Fabric-Labels-Handwrite-32130/dp/B08PF2162N"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("lfLabelTip")}
+            </a>
+          </p>
           {/* The whole listing's size, steady while someone searches or
               filters. Zero says nothing — the empty grid already does. */}
           {total !== null && total > 0 && (

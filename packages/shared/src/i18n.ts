@@ -848,6 +848,8 @@ export interface Strings {
   lfNavStaff: string;
   lfBrowseTitle: string;
   lfBrowseLead: string;
+  /** Tip under the browse lead linking to fabric name labels parents recommend. */
+  lfLabelTip: string;
   /** The count up top: how many items are listed in all. One/many forms. */
   lfItemCountOne: string;
   lfItemCount: string;
@@ -1763,6 +1765,7 @@ const en: Strings = {
   lfNavStaff: "Staff",
   lfBrowseTitle: "Lost something?",
   lfBrowseLead: "Everything turned in at school, with a photo. Found yours? Open it and tap “That's mine!”",
+  lfLabelTip: "Eisenhower parents have had good luck using these fabric stickers to label their belongings",
   lfItemCountOne: "1 item is waiting for its owner.",
   lfItemCount: "{n} items are waiting for their owners.",
   lfSearchPlaceholder: "Try “blue water bottle” or “dinosaur hoodie”",
@@ -2608,6 +2611,7 @@ const es: Strings = {
   lfNavStaff: "Personal",
   lfBrowseTitle: "¿Perdiste algo?",
   lfBrowseLead: "Todo lo que se ha entregado en la escuela, con foto. ¿Encontraste lo tuyo? Ábrelo y toca «¡Es mío!».",
+  lfLabelTip: "A las familias de Eisenhower les han dado buen resultado estas etiquetas de tela para marcar sus pertenencias",
   lfItemCountOne: "1 objeto espera a su dueño.",
   lfItemCount: "{n} objetos esperan a sus dueños.",
   lfSearchPlaceholder: "Prueba «botella de agua azul» o «sudadera de dinosaurio»",
@@ -3415,6 +3419,7 @@ const zh: Strings = {
   lfNavStaff: "工作人员",
   lfBrowseTitle: "丢了东西？",
   lfBrowseLead: "学校里交上来的所有物品，都附有照片。找到你的了吗？打开它，点击“这是我的！”",
+  lfLabelTip: "Eisenhower 的家长们反映，用这种布质标签贴给物品写上名字，效果很好",
   lfItemCountOne: "有 1 件物品在等失主。",
   lfItemCount: "有 {n} 件物品在等失主。",
   lfSearchPlaceholder: "试试“蓝色水壶”或“恐龙卫衣”",
@@ -4318,6 +4323,7 @@ const so: Strings = {
   lfNavStaff: "Shaqaalaha",
   lfBrowseTitle: "Wax ma kaa lumay?",
   lfBrowseLead: "Wax kasta oo dugsiga lagu soo celiyay, sawir leh. Ma heshay kaaga? Fur oo taabo “Waa kayga!”",
+  lfLabelTip: "Waalidiinta Eisenhower waxay natiijo wanaagsan ka heleen istiikarradan maro ah si ay alaabtooda u calaamadeeyaan",
   lfItemCountOne: "1 shay ayaa sugaya qofkii lahaa.",
   lfItemCount: "{n} shay ayaa sugaya dadkii lahaa.",
   lfSearchPlaceholder: "Isku day “dhalo biyo buluug ah” ama “funaanad dinosaur”",
