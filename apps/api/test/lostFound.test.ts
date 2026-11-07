@@ -22,6 +22,7 @@ import {
   normalizeContact,
   parseClaimNotifyEmails,
   publicItemOf,
+  returnedEverCount,
   saveFields,
   staffItemOf,
   scrubNames,
@@ -594,6 +595,48 @@ describe("normalizeContact", () => {
   it("treats one phone number written two ways as one contact", () => {
     expect(normalizeContact("(612) 555-0100")).toBe(normalizeContact("612.555.0100"));
     expect(normalizeContact(" Pat@Example.com ")).toBe("pat@example.com");
+  });
+});
+
+// ── The all-time returned count ─────────────────────────────────────────────
+
+describe("returnedEverCount", () => {
+  /** A fake D1 that holds an audit log as action strings and EVALUATES the
+   *  two COUNT subqueries, so a rewrite that forgot to net out `restored` —
+   *  or started counting some other action — fails here, not in production. */
+  function auditEnv(actions: string[]) {
+    return {
+      DB: {
+        prepare(sql: string) {
+          return {
+            async first(col: string) {
+              expect(col).toBe("n");
+              const count = (action: string) => actions.filter((a) => a === action).length;
+              const m = [...sql.matchAll(/WHERE action = '([^']+)'/g)].map((x) => x[1]!);
+              expect(m).toHaveLength(2);
+              return count(m[0]!) - count(m[1]!);
+            },
+          };
+        },
+      },
+    } as unknown as HonoEnv["Bindings"];
+  }
+
+  it("counts returns net of restores, from the audit log", async () => {
+    const env = auditEnv([
+      "lostfound.item.returned",
+      "lostfound.item.returned",
+      "lostfound.item.restored", // one return undone: it did not go home
+      "lostfound.item.returned",
+      "lostfound.item.created", // unrelated actions never count
+      "lostfound.claim.created",
+    ]);
+    expect(await returnedEverCount(env)).toBe(2);
+  });
+
+  it("clamps at zero rather than rendering a negative count", async () => {
+    expect(await returnedEverCount(auditEnv(["lostfound.item.restored"]))).toBe(0);
+    expect(await returnedEverCount(auditEnv([]))).toBe(0);
   });
 });
 

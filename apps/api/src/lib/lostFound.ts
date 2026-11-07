@@ -657,6 +657,22 @@ export async function listedCount(env: Env): Promise<number> {
   return n ?? 0;
 }
 
+/** How many items have EVER gone home — the browse page's "reunited so far"
+ *  line. `lf_item` can't answer this: returned rows are deleted by the
+ *  retention sweep 30 days on, so the one durable record of a return is its
+ *  audit row (append-only, never swept). Counted net of `restored`, the undo —
+ *  an item returned by mistake and restored has not gone home. Both counts are
+ *  ranges on idx_audit_action (migration 0028), so an anonymous browse doesn't
+ *  scan the log. A bare count, nothing per-item (invariant 18's COUNT rule);
+ *  clamped at zero so a half-restored history can't render "-1 items". */
+export async function returnedEverCount(env: Env): Promise<number> {
+  const n = await env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM audit_log WHERE action = 'lostfound.item.returned')
+          - (SELECT COUNT(*) FROM audit_log WHERE action = 'lostfound.item.restored') AS n`,
+  ).first<number>("n");
+  return Math.max(0, n ?? 0);
+}
+
 export function parseFilters(q: Record<string, string>): LfFilters {
   return {
     category: isCategory(q.category) ? q.category : undefined,

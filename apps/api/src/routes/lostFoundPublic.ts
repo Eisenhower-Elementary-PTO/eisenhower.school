@@ -29,6 +29,7 @@ import {
   notifyLostFoundClaim,
   parseFilters,
   publicItemOf,
+  returnedEverCount,
   search,
 } from "../lib/lostFound.js";
 import { DAYS, nowIso } from "../lib/time.js";
@@ -45,12 +46,13 @@ lostFoundPublic.get("/items", async (c) => {
 
   // `total` is the WHOLE listing's size, deliberately ignoring the search and
   // filters — it is the "N items are waiting" line up top, steady while
-  // someone narrows.
-  const [{ items, hasMore }, total] = await Promise.all([
+  // someone narrows. `returnedTotal` is all-time (lib/lostFound.ts).
+  const [{ items, hasMore }, total, returnedTotal] = await Promise.all([
     q ? search(c.env, q, filters) : browse(c.env, filters, page),
     listedCount(c.env),
+    returnedEverCount(c.env),
   ]);
-  return c.json({ items: items.map((row) => publicItemOf(row, origin)), hasMore, total });
+  return c.json({ items: items.map((row) => publicItemOf(row, origin)), hasMore, total, returnedTotal });
 });
 
 /** GET /lostfound-public/items/:id — 404 for anything not currently listed. */

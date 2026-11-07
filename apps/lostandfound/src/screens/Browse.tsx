@@ -26,6 +26,7 @@ export function Browse() {
   const [draft, setDraft] = useState(q);
   const [items, setItems] = useState<LfPublicItemDTO[] | null>(null);
   const [total, setTotal] = useState<number | null>(null);
+  const [returnedTotal, setReturnedTotal] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(0);
   const [error, setError] = useState(false);
@@ -61,6 +62,7 @@ export function Browse() {
       if (mine !== seq.current) return;
       setItems((prev) => (nextPage === 0 || !prev ? res.items : [...prev, ...res.items]));
       setTotal(res.total);
+      setReturnedTotal(res.returnedTotal);
       setHasMore(res.hasMore);
       setPage(nextPage);
     } catch {
@@ -96,6 +98,16 @@ export function Browse() {
           {total !== null && total > 0 && (
             <p className="sd-meta" style={{ marginTop: 6 }}>
               {total === 1 ? t("lfItemCountOne") : t("lfItemCount", { n: total })}
+            </p>
+          )}
+          {/* All-time reunions, from the audit log (returned items leave the
+              table). Zero says nothing — a brand-new board has no record to
+              brag about yet. */}
+          {returnedTotal !== null && returnedTotal > 0 && (
+            <p className="sd-meta" style={{ marginTop: 2 }}>
+              {returnedTotal === 1
+                ? t("lfReturnedCountOne")
+                : t("lfReturnedCount", { n: returnedTotal })}
             </p>
           )}
         </div>

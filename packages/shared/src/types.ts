@@ -2054,6 +2054,10 @@ export interface LfPublicListDTO {
    *  "N items are waiting" line up top. A count over exactly the public gate,
    *  so it discloses nothing browsing doesn't. */
   total: number;
+  /** How many items have ever been returned to their owners, counted from the
+   *  audit log (item rows are swept after a return; the log isn't), net of
+   *  staff undoing a return. A bare all-time count, nothing per-item. */
+  returnedTotal: number;
 }
 
 /** POST /lostfound-public/items/:id/claims. `website` is a honeypot: a person
