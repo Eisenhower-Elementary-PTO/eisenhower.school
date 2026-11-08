@@ -33,6 +33,7 @@ import type {
   RestoreReportDTO,
   ShareGranteeDTO,
   ShareTargetDTO,
+  SuiteMetricsDTO,
   PlatformAppKey,
   PlatformOrigins,
 } from "@sd/shared";
@@ -290,6 +291,8 @@ export const api = {
     return request<{ entries: AuditEntryDTO[]; nextBefore: string | null }>(`/admin/audit${qs ? `?${qs}` : ""}`);
   },
   auditActions: () => request<{ actions: AuditActionCountDTO[] }>("/admin/audit/actions"),
+  /** Counts across every app in the suite — numbers only, never identities. */
+  suiteMetrics: () => request<{ metrics: SuiteMetricsDTO }>("/admin/metrics"),
   bulkImport: (rows: BulkImportRow[], dryRun: boolean, options: BulkImportOptions & { sendInvites?: boolean }) =>
     request<BulkImportResult>("/admin/bulk-import", { method: "POST", body: JSON.stringify({ rows, dryRun, ...options }) }),
 

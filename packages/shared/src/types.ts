@@ -921,6 +921,77 @@ export interface AuditActionCountDTO {
   count: number;
 }
 
+/** GET /admin/metrics — one read across the whole suite (system admins only).
+ *  Every field is a COUNT or a SUM: numbers, never identities — invariant 21's
+ *  own carve-out for `member_count`, applied suite-wide. Nothing here names a
+ *  person, an email address or a street. */
+export interface SuiteMetricsDTO {
+  directory: {
+    /** Sign-in accounts, disabled included (they're flagged, not hidden). */
+    accounts: number;
+    disabledAccounts: number;
+    /** Enabled system admins. */
+    admins: number;
+    /** Enabled accounts holding directory access (invariant 32). */
+    approvedAccounts: number;
+    /** Applications waiting on a reviewer. */
+    pendingAccessRequests: number;
+    newAccounts30d: number;
+    /** All Persons, unlisted included — the viewer is a system admin, the one
+     *  audience `unlisted_at` never hides from. */
+    people: number;
+    unlistedPeople: number;
+    households: number;
+    classrooms: number;
+  };
+  calendar: {
+    calendars: number;
+    managedEvents: number;
+    importedSources: number;
+    /** Expanded occurrences from now on — the agenda's forward horizon. */
+    upcomingOccurrences: number;
+  };
+  volunteers: {
+    publishedSheets: number;
+    signups: number;
+    signups30d: number;
+  };
+  newsletter: {
+    /** Currently subscribed (not unsubscribed) addresses. */
+    subscribers: number;
+    issuesSent: number;
+    /** All-time public archive page loads (migration 0042 — a floor, not a
+     *  census: email opens are never tracked). */
+    archiveViews: number;
+    archiveViews30d: number;
+  };
+  store: {
+    /** Orders money actually arrived for (`paid_at` set), all later states
+     *  included. */
+    paidOrders: number;
+    paidOrders30d: number;
+    /** SUM(total_cents) over those orders. */
+    revenueCents: number;
+    /** Paid orders stuck in `fulfillment_failed` — the ones needing a human. */
+    fulfillmentFailed: number;
+  };
+  pto: {
+    boards: number;
+    openCards: number;
+  };
+  lostAndFound: {
+    /** On the public site right now. */
+    listed: number;
+    /** Held for staff review (invariant 33's hold). */
+    awaitingReview: number;
+    returned: number;
+    openClaims: number;
+  };
+  /** Audit rows appended in the last 30 days — a rough pulse of member and
+   *  admin activity, every app combined. */
+  auditEvents30d: number;
+}
+
 /**
  * Where an account stands with the one gate that is not `requireAuth`
  * (migration 0029, invariant 32).

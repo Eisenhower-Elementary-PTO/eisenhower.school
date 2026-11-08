@@ -17,6 +17,7 @@ import { isoPlus, isExpired, nowIso, sleep, MAGIC_LINK_TTL, MASQUERADE_TTL, SESS
 import { setSessionCookie, clearActivePersonCookie } from "../lib/cookies.js";
 import { findUserByEmail, normalizeEmail } from "../lib/db.js";
 import { computeUserDeletionImpact, userDeletionStmts } from "../lib/userAdmin.js";
+import { suiteMetrics } from "../lib/suiteMetrics.js";
 import { accessStateOf } from "../lib/directoryAccess.js";
 import {
   magicLinkEmail,
@@ -1282,4 +1283,17 @@ admin.post("/access-requests/:userId", async (c) => {
     detail: { from: before, placementsPromoted: promoted },
   });
   return c.json({ ok: true, state: after, promoted });
+});
+
+/**
+ * GET /admin/metrics — one read across the whole suite, for the admin metrics
+ * screen. System admins only; the shape is aggregates top to bottom (COUNTs
+ * and SUMs — numbers, never identities), built by lib/suiteMetrics.ts. No
+ * audit draft: a read of counters is not a member action (invariant 34's
+ * reasoning, and `read_budget`'s before it).
+ */
+admin.get("/metrics", async (c) => {
+  const auth = requireAuth(c);
+  if (!auth.isSystemAdmin) return c.json({ error: "forbidden" }, 403);
+  return c.json({ metrics: await suiteMetrics(c.env) });
 });

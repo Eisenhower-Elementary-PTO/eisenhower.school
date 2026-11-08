@@ -6,7 +6,8 @@ export type IconName =
   | "chevright" | "chevleft" | "home" | "school" | "phone" | "mail" | "link"
   | "pin" | "x" | "wifioff" | "shield" | "search" | "arrowleft" | "bolt"
   | "upload" | "globe" | "gear" | "users3" | "file" | "table" | "swap"
-  | "dot3" | "star" | "minus" | "info" | "calendar" | "download" | "grid" | "box";
+  | "dot3" | "star" | "minus" | "info" | "calendar" | "download" | "grid" | "box"
+  | "chart";
 
 const paths: Record<IconName, ReactNode> = {
   lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
@@ -45,6 +46,7 @@ const paths: Record<IconName, ReactNode> = {
   download: <><path d="M12 4v10M8 11l4 4 4-4" /><path d="M5 19h14" /></>,
   grid: <><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></>,
   box: <><path d="M3.5 8L12 4l8.5 4v8L12 20l-8.5-4z" /><path d="M3.5 8L12 12l8.5-4M12 12v8" /></>,
+  chart: <><path d="M4 4v16h16" /><path d="M8.5 16v-5M13 16V7.5M17.5 16v-3" /></>,
 };
 
 export function Icon({

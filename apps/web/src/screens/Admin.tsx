@@ -713,6 +713,19 @@ export function Admin() {
 
   const usersTab = (
     <>
+      {/* Suite-wide counters — its own screen, like Import. */}
+      <SectLabel>Across the suite</SectLabel>
+      <div className="sd-card" style={{ marginTop: 9, marginBottom: 18, padding: 13, display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }} onClick={() => navigate("/admin/metrics")}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--blue-tint)", color: "var(--blue)", display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+          <Icon name="chart" size={20} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700 }}>Metrics</div>
+          <div className="sd-meta">Counts across every site: members, calendar, volunteers, newsletter, store, PTO, lost &amp; found.</div>
+        </div>
+        <Icon name="chevright" size={18} style={{ color: "var(--ink-3)" }} />
+      </div>
+
       {/* Registration toggle */}
       <SectLabel>Sign-ups</SectLabel>
       <div className="sd-card sd-card-pad" style={{ marginTop: 9 }}>

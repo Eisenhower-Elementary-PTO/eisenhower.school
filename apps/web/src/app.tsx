@@ -11,6 +11,7 @@ import { ProfileView, ProfileEdit } from "./screens/Profile.js";
 import { GroupDetail, GroupsIndex } from "./screens/Group.js";
 import { Admin } from "./screens/Admin.js";
 import { Import } from "./screens/Import.js";
+import { Metrics } from "./screens/Metrics.js";
 import { Directory } from "./screens/Directory.js";
 import { Access, RequireApproved } from "./screens/Access.js";
 import { Welcome } from "./screens/Welcome.js";
@@ -116,6 +117,7 @@ export function App() {
       <Route path="/you" element={<RequireProfile><Stub title="You" nav="me" /></RequireProfile>} />
       <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
       <Route path="/admin/import" element={<RequireAuth><Import /></RequireAuth>} />
+      <Route path="/admin/metrics" element={<RequireAuth><Metrics /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
