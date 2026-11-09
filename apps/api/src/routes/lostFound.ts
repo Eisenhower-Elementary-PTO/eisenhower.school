@@ -55,8 +55,9 @@ import {
   type LfStaffRow,
 } from "../lib/lostFound.js";
 import { genericGroups, groupExists } from "../lib/rosterGate.js";
+import { lostFoundReturnEmail, sendEmailResult } from "../lib/email.js";
 import { DAYS, nowIso } from "../lib/time.js";
-import { LF_CLAIM_NOTIFY_MAX, LF_DONATE_AFTER_DAYS } from "@sd/shared";
+import { LF_CLAIM_NOTIFY_MAX, LF_DONATE_AFTER_DAYS, isLfReturnMethod, lfClaimLocale, lfContactIsEmail } from "@sd/shared";
 import type { AuditAction } from "@sd/shared";
 
 const JPEG = "image/jpeg";
@@ -567,6 +568,85 @@ lostFound.get(
         ORDER BY cl.created_at ASC`,
     ).all<LfClaimRow & { item_title: string; thumb_key: string }>();
     return c.json({ claims: results.map((r) => claimOf(r, originOf(c))) });
+  }),
+);
+
+/** POST /lostfound/claims/:id/return { method, notify? } — the item went home
+ *  against THIS claim, and how. Runs the same guarded return transition the
+ *  item routes use (resolving every open claim on the item, this one
+ *  included), then — when asked, and the contact is email-shaped — mails the
+ *  claimant that it's on its way: the words come from `lostFoundReturnMessage`
+ *  in @sd/shared, in the language the claim form was filled in, naming the
+ *  item and the school and never a child (a mistyped address must not deliver
+ *  a child's name to a stranger).
+ *
+ *  The send is claimed by CAS on `notified_at` (migration 0044;
+ *  `reminder_sent_at`'s pattern) so a double-tap mails nobody twice, and a
+ *  failed send releases its own claim — matched by value — so staff can retry
+ *  or fall back to the manual links. The audit draft is pushed only for a
+ *  send that happened: the action records the NOTIFICATION, and a failed one
+ *  leaves no durable write behind (the release undoes the CAS). `detail`
+ *  carries the item id and method only — claimant fields never reach a row
+ *  that lives forever (migration 0043's rule). Synchronous rather than
+ *  `waitUntil`, because the dashboard needs to know whether to offer the
+ *  manual fallback. */
+lostFound.post(
+  "/claims/:id/return",
+  guarded(async (c) => {
+    await requireStaff(c);
+    const id = param(c, "id");
+    const body = await c.req.json<{ method?: unknown; notify?: unknown }>().catch(() => null);
+    const method = body?.method;
+    if (!isLfReturnMethod(method)) {
+      return c.json({ error: "invalid", message: "Unknown return method." }, 400);
+    }
+    const wantNotify = body?.notify !== false;
+
+    const claim = await c.env.DB.prepare(
+      `SELECT cl.*, i.title AS item_title
+         FROM lf_claim cl JOIN lf_item i ON i.id = cl.item_id
+        WHERE cl.id = ?`,
+    )
+      .bind(id)
+      .first<LfClaimRow & { item_title: string }>();
+    if (!claim) return c.json({ error: "not_found" }, 404);
+
+    const t = TRANSITIONS.return!;
+    const res = await c.env.DB.prepare(t.sql).bind(nowIso(), claim.item_id).run();
+    if ((res.meta?.changes ?? 0) > 0) {
+      if (t.after) await c.env.DB.batch(t.after(c, claim.item_id));
+      c.var.audit.push({ action: t.action, entityKind: "lf_item", entityId: claim.item_id });
+      c.executionCtx.waitUntil(syncVector(c.env, claim.item_id));
+    }
+
+    if (!wantNotify) return c.json({ ok: true, notified: false });
+    if (!lfContactIsEmail(claim.contact)) return c.json({ ok: true, notified: false, reason: "not_email" });
+
+    const now = nowIso();
+    const claimed = await c.env.DB.prepare(
+      "UPDATE lf_claim SET notified_at = ? WHERE id = ? AND notified_at IS NULL",
+    )
+      .bind(now, id)
+      .run();
+    if ((claimed.meta?.changes ?? 0) === 0) {
+      return c.json({ ok: true, notified: false, reason: "already_notified" });
+    }
+
+    const msg = lostFoundReturnEmail(lfClaimLocale(claim.lang), method, claim.item_title);
+    const sent = await sendEmailResult(c.env, { ...msg, to: claim.contact.trim() });
+    if (!sent.ok) {
+      await c.env.DB.prepare("UPDATE lf_claim SET notified_at = NULL WHERE id = ? AND notified_at = ?")
+        .bind(id, now)
+        .run();
+      return c.json({ ok: true, notified: false, reason: "send_failed" });
+    }
+    c.var.audit.push({
+      action: "lostfound.claim.return_notified",
+      entityKind: "lf_claim",
+      entityId: id,
+      detail: { itemId: claim.item_id, method },
+    });
+    return c.json({ ok: true, notified: true });
   }),
 );
 

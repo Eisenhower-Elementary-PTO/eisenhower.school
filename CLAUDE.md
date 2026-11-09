@@ -1121,6 +1121,23 @@ Worker, sharing one session:
      suppressed, capped and unlisted. Claimant details never reach `detail`
      (audit rows are forever; claims aren't) or Slack —
      `lostfound.claim.created` is the only curated action and names nothing.
+   - **Returning an item answers the claimant** (migration 0044): staff mark an
+     item returned AGAINST a claim (`POST /lostfound/claims/:id/return`),
+     saying how it went home (classroom / office / family); an email-shaped
+     contact is then mailed ONE message — `lostFoundReturnMessage` in
+     `packages/shared/src/lostFoundReturn.ts`, rendered in the language the
+     claim form was filled in (`lf_claim.lang`, bucketed to LOCALES on write)
+     and naming the item and the school, NEVER a child (the address was typed
+     free-hand; a typo must not deliver a child's name to a stranger). The
+     SAME builder feeds the dashboard's prefilled `sms:`/copy message for
+     phone contacts, so the automatic and manual messages can't drift. The
+     send is a CAS on `notified_at` (`reminder_sent_at`'s pattern); a failed
+     send releases its own claim, matched by value.
+     `lostfound.claim.return_notified` carries item id + method only and is
+     Slack-silent. The claim form PREFILLS: a signed-in member's account email
+     (recorded as `contact_verified` when the typed contact matches — a chip
+     for staff, granting and gating nothing), else what this device last
+     submitted (localStorage, written only signed-out; `lib/claimDraft.ts`).
    Staff are a ROSTER (`lostfound_staff_group_id`, `rosterAccess` — invariant
    31), never the self-assertable `staff` capability. Photos live in
    `LOSTFOUND_MEDIA`, its own bucket behind a public route, so it can never

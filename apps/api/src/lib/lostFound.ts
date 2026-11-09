@@ -32,7 +32,7 @@
 // eyes before publishing, so a name the model misfiled as not-a-name still
 // passes a person on its way to the public page.
 
-import { LF_CATEGORIES, LF_CLAIM_NOTIFY_MAX, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS } from "@sd/shared";
+import { LF_CATEGORIES, LF_CLAIM_NOTIFY_MAX, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS, lfClaimLocale } from "@sd/shared";
 import type { LfClaimDTO, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
 import type { AuthContext, Env } from "../env.js";
 import { getSetting } from "./db.js";
@@ -147,6 +147,15 @@ export interface LfClaimRow {
   child_name: string;
   teacher: string;
   message: string;
+  /** The claim form's UI language, bucketed to LOCALES on write (migration
+   *  0044) — picks the dictionary the return notification renders from. */
+  lang: string;
+  /** 1 when the claimant was signed in and the contact IS that account's email
+   *  (migration 0044). A chip on the staff queue; grants and gates nothing. */
+  contact_verified: number;
+  /** When the return notification was mailed — the CAS claim on the send
+   *  (migration 0044), `reminder_sent_at`'s pattern. */
+  notified_at: string | null;
   created_at: string;
   resolved_at: string | null;
   resolution: "returned" | "dismissed" | null;
@@ -279,6 +288,9 @@ export function claimOf(row: LfClaimRow & { item_title: string; thumb_key: strin
     childName: row.child_name,
     teacher: row.teacher,
     message: row.message,
+    lang: lfClaimLocale(row.lang),
+    contactVerified: row.contact_verified === 1,
+    notifiedAt: row.notified_at,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
     resolution: row.resolution,

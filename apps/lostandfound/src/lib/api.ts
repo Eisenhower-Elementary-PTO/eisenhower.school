@@ -22,6 +22,7 @@ import type {
   LfItemPatch,
   LfPublicItemDTO,
   LfPublicListDTO,
+  LfReturnMethod,
   LfSettingsDTO,
   LfStaffItemDTO,
   LfStaffItemDetailDTO,
@@ -176,6 +177,15 @@ export const api = {
   claims: () => request<{ claims: LfClaimDTO[] }>("/lostfound/claims"),
   dismissClaim: (id: string) =>
     request<{ ok: true }>(`/lostfound/claims/${encodeURIComponent(id)}/dismiss`, action("POST")),
+  /** The item went home against THIS claim. Marks the item returned and, when
+   *  `notify` and the contact is an email address, mails the claimant — in the
+   *  claim's own language, naming the item and never a child. `notified:
+   *  false` with a `reason` means fall back to the manual links. */
+  returnClaim: (id: string, method: LfReturnMethod, notify: boolean) =>
+    request<{ ok: true; notified: boolean; reason?: "not_email" | "already_notified" | "send_failed" }>(
+      `/lostfound/claims/${encodeURIComponent(id)}/return`,
+      post({ method, notify }),
+    ),
 
   // ── Settings (system admin) ──
   groups: () => request<{ groups: { id: string; name: string; memberCount: number }[] }>("/lostfound/groups"),

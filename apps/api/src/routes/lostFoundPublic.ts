@@ -13,6 +13,7 @@
 // caller, so neither the caps nor the existence of earlier claims is an oracle.
 
 import { Hono } from "hono";
+import { lfClaimLocale } from "@sd/shared";
 import type { LfClaimInput } from "@sd/shared";
 import type { HonoEnv } from "../env.js";
 import { ulid } from "../lib/ids.js";
@@ -77,6 +78,10 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
   const childName = cleanText(body?.childName, 100);
   const teacher = cleanText(body?.teacher, 100);
   const message = cleanText(body?.message, 1000);
+  // The form's UI language, bucketed to LOCALES (anything else is "en") so the
+  // column can't carry free text — it picks the dictionary the return
+  // notification answers in (migration 0044).
+  const lang = lfClaimLocale(body?.lang);
   if (!name || contact.length < 3) return c.json({ error: "invalid" }, 400);
 
   // A person never sees the `website` field; anything in it is a script.
@@ -107,12 +112,18 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
     }
 
     const id = ulid();
+    // This route is open to anyone, but the session middleware still ran: a
+    // signed-in member's claim carries their cookie. When the contact they
+    // typed IS their account email, the row records it as verified — that
+    // address has already received a magic link. Their own session, their own
+    // address: it discloses nothing and gates nothing (migration 0044).
+    const verified = c.var.auth && c.var.auth.email.toLowerCase() === contact.trim().toLowerCase() ? 1 : 0;
     // `contact` as typed — "after 3pm, 612-555-0100 ext 5" is for a person to
     // read — and the normalized key beside it for the cap above.
     await c.env.DB.prepare(
-      "INSERT INTO lf_claim (id, item_id, name, contact, contact_key, child_name, teacher, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO lf_claim (id, item_id, name, contact, contact_key, child_name, teacher, message, lang, contact_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(id, item.id, name, contact, key, childName, teacher, message, nowIso())
+      .bind(id, item.id, name, contact, key, childName, teacher, message, lang, verified, nowIso())
       .run();
 
     // Anonymous: the actor column is null, as newsletter.subscribed's is. The

@@ -8,7 +8,8 @@
 // public form, so they are shown as plain text and links, never as markup.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { LfClaimDTO, LfStaffItemDTO } from "@sd/shared";
+import { lfContactIsEmail, lfContactPhone, lostFoundReturnMessage } from "@sd/shared";
+import type { LfClaimDTO, LfReturnMethod, LfStaffItemDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
 import { ItemCard } from "../../components/items.js";
 import { Btn, Tag } from "../../components/atoms.js";
@@ -69,15 +70,141 @@ const BULK_CHOICES: Record<Tab, BulkChoice[]> = {
   returned: [{ label: "Put back in lost & found", action: "restore" }, BULK_DELETE],
 };
 
-/** A contact as a link when it plainly is one. Anything else stays text. */
+/** A contact as a link when it plainly is one. Anything else stays text.
+ *  The shape rules are @sd/shared's (lostFoundReturn.ts) — the same answers
+ *  that decide whether the return flow offers "email them" or "text them". */
 function ContactLink({ contact }: { contact: string }) {
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+  if (lfContactIsEmail(contact)) {
     return <a className="sd-link" href={`mailto:${contact}`}>{contact}</a>;
   }
-  if (/^[\d\s()+.-]{7,}$/.test(contact)) {
-    return <a className="sd-link" href={`tel:${contact.replace(/[^\d+]/g, "")}`}>{contact}</a>;
+  const phone = lfContactPhone(contact);
+  if (phone) {
+    return <a className="sd-link" href={`tel:${phone}`}>{contact}</a>;
   }
   return <span>{contact}</span>;
+}
+
+/** How the item went home — the one question the return flow asks. The answer
+ *  picks the sentence the family gets (@sd/shared's lostFoundReturnMessage). */
+const RETURN_METHODS: { key: LfReturnMethod; label: string }[] = [
+  { key: "classroom", label: "Sent to the classroom" },
+  { key: "office", label: "At the front office" },
+  { key: "family", label: "Handed to the family" },
+];
+
+/** Marking one claim's item returned, and telling the family. Email contacts
+ *  get one tap — the server sends the same message this flow previews, in the
+ *  language the claim form was filled in. Phone and free-text contacts stay a
+ *  manual send, but with nothing left to compose: a prefilled text-message
+ *  link, and a copy button that SHOWS the message when the clipboard refuses
+ *  (the volunteer-emails screen's fallback). */
+function ReturnFlow({
+  claim,
+  onDone,
+  onCancel,
+}: {
+  claim: LfClaimDTO;
+  /** Reload the lists; `note` lands by the Claims heading. */
+  onDone: (note: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [method, setMethod] = useState<LfReturnMethod>("classroom");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showMessage, setShowMessage] = useState(false);
+
+  const isEmail = lfContactIsEmail(claim.contact);
+  const phone = lfContactPhone(claim.contact);
+  // The very words the server would email — one builder for both paths, so the
+  // automatic and the manual message can't drift apart.
+  const msg = lostFoundReturnMessage(claim.lang, method, claim.itemTitle);
+
+  const run = async (notify: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.returnClaim(claim.id, method, notify);
+      if (notify && !r.notified) {
+        await onDone(
+          r.reason === "send_failed"
+            ? `Marked returned, but the email to ${claim.contact} did NOT send — reach them yourself.`
+            : r.reason === "already_notified"
+              ? "Marked returned — they had already been emailed."
+              : `Marked returned. ${claim.contact} isn't an email address — reach them yourself.`,
+        );
+      } else {
+        await onDone(notify ? `Marked returned and emailed ${claim.contact}.` : "Marked returned.");
+      }
+    } catch (err) {
+      setError(errorMessage(err, "That didn't work. Try again."));
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(msg.body);
+      setCopied(true);
+    } catch {
+      setShowMessage(true);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+      <div className="sd-meta">How is it getting home?</div>
+      <div className="lf-actions">
+        {RETURN_METHODS.map((m) => (
+          <Btn
+            key={m.key}
+            sm
+            kind={method === m.key ? "secondary" : "ghost"}
+            disabled={busy}
+            onClick={() => setMethod(m.key)}
+          >
+            {m.label}
+          </Btn>
+        ))}
+      </div>
+      {isEmail ? (
+        <div className="lf-actions">
+          <Btn sm disabled={busy} onClick={() => void run(true)}>
+            Mark returned &amp; email them
+          </Btn>
+          <Btn sm kind="ghost" disabled={busy} onClick={() => void run(false)}>
+            Mark returned only
+          </Btn>
+        </div>
+      ) : (
+        <div className="lf-actions">
+          {phone && (
+            <a className="sd-btn sd-btn-secondary sd-btn-sm" href={`sms:${phone}?&body=${encodeURIComponent(msg.body)}`}>
+              Text them the news
+            </a>
+          )}
+          <Btn sm kind="ghost" disabled={busy} onClick={() => void copy()}>
+            {copied ? "Copied ✓" : "Copy the message"}
+          </Btn>
+          <Btn sm disabled={busy} onClick={() => void run(false)}>
+            Mark returned
+          </Btn>
+        </div>
+      )}
+      {claim.lang !== "en" && (
+        <div className="sd-meta">The message is written in the language they filled the form in.</div>
+      )}
+      {showMessage && (
+        <div className="sd-card sd-card-pad" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {msg.body}
+        </div>
+      )}
+      {error && <div className="lf-notice warn" role="alert">{error}</div>}
+      <Btn sm kind="ghost" disabled={busy} onClick={onCancel} style={{ alignSelf: "flex-start" }}>
+        Cancel
+      </Btn>
+    </div>
+  );
 }
 
 export function Dashboard() {
@@ -92,6 +219,9 @@ export function Dashboard() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
+  /** Which claim's return flow is open, and the outcome line of the last one. */
+  const [returning, setReturning] = useState<string | null>(null);
+  const [claimNote, setClaimNote] = useState<string | null>(null);
 
   const loadClaims = () =>
     api
@@ -136,6 +266,14 @@ export function Dashboard() {
     } catch (err) {
       setError(errorMessage(err, "That didn't work. Try again."));
     }
+  };
+
+  /** A return flow finished — its outcome stays on screen while the queue
+   *  reloads out from under the card it was about. */
+  const finishReturn = async (note: string) => {
+    setReturning(null);
+    setClaimNote(note);
+    await Promise.all([loadClaims(), loadItems(tab), loadReviewCount()]);
   };
 
   /** The last card clicked in selection mode — what a shift-click extends
@@ -248,6 +386,7 @@ export function Dashboard() {
 
         <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <h2 className="sd-h2">Claims</h2>
+          {claimNote && <div className="sd-meta" role="status">{claimNote}</div>}
           {claims === null ? (
             <div className="sd-meta">Loading…</div>
           ) : claims.length === 0 ? (
@@ -266,7 +405,12 @@ export function Dashboard() {
                     </Link>{" "}
                     is theirs
                   </div>
-                  <ContactLink contact={c.contact} />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <ContactLink contact={c.contact} />
+                    {/* The claimant was signed in and this IS their account
+                        email — it has already received a magic link. */}
+                    {c.contactVerified && <Tag tone="blue">Verified</Tag>}
+                  </div>
                   {(c.childName || c.teacher) && (
                     <div style={{ overflowWrap: "anywhere" }}>
                       For {c.childName || "their child"}
@@ -275,14 +419,16 @@ export function Dashboard() {
                   )}
                   {c.message && <div style={{ overflowWrap: "anywhere" }}>“{c.message}”</div>}
                   <div className="sd-meta">{formatDayTime(c.createdAt, locale)}</div>
-                  <div className="lf-actions" style={{ marginTop: 4 }}>
-                    <Btn sm onClick={() => void act(() => api.itemAction(c.itemId, "return"))}>
-                      Mark returned
-                    </Btn>
-                    <Btn sm kind="ghost" onClick={() => void act(() => api.dismissClaim(c.id))}>
-                      Dismiss
-                    </Btn>
-                  </div>
+                  {returning === c.id ? (
+                    <ReturnFlow claim={c} onDone={finishReturn} onCancel={() => setReturning(null)} />
+                  ) : (
+                    <div className="lf-actions" style={{ marginTop: 4 }}>
+                      <Btn sm onClick={() => setReturning(c.id)}>Mark returned…</Btn>
+                      <Btn sm kind="ghost" onClick={() => void act(() => api.dismissClaim(c.id))}>
+                        Dismiss
+                      </Btn>
+                    </div>
+                  )}
                 </div>
               </div>
             ))

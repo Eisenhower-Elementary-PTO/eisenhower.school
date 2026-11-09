@@ -2145,6 +2145,10 @@ export interface LfClaimInput {
   teacher?: string;
   message?: string;
   website?: string;
+  /** The UI language the claim form was filled in (migration 0044), so the
+   *  return notification can answer in it. Bucketed to LOCALES on write —
+   *  anything else stores as "en" — so the field can't carry free text. */
+  lang?: string;
 }
 
 export type LfItemStatus = "found" | "returned";
@@ -2200,6 +2204,18 @@ export interface LfClaimDTO {
   /** The child's teacher or room, as typed ("" when not given). */
   teacher: string;
   message: string;
+  /** The claim form's UI language (migration 0044) — what language the return
+   *  notification goes out in, and what the dashboard's prefilled manual
+   *  message is written in. */
+  lang: Locale;
+  /** True when the claimant was signed in and the contact IS that account's
+   *  email, checked server-side at submit time (migration 0044). The staff
+   *  queue shows it as a "verified" chip: this address has already received a
+   *  magic link, so a notification to it reaches a real inbox. */
+  contactVerified: boolean;
+  /** When the return notification email went out (migration 0044); null for
+   *  never, including every phone-contact claim. */
+  notifiedAt: string | null;
   createdAt: string;
   resolvedAt: string | null;
   resolution: "returned" | "dismissed" | null;
@@ -2507,6 +2523,13 @@ export type AuditAction =
    *  line names no claimant and no item text (invariant 22). */
   | "lostfound.claim.created"
   | "lostfound.claim.dismissed"
+  /** Staff marked an item returned against a claim and the system mailed the
+   *  claimant that it's on its way (routes/lostFound.ts). `detail` carries the
+   *  item id and the return method only — the claimant's address, like every
+   *  claim field, stays out of a row that lives forever. Slack-silent
+   *  (FORMATTERS' default): the human act it records is already the
+   *  `lostfound.item.returned` next to it. */
+  | "lostfound.claim.return_notified"
   /** A system admin named the group whose roster runs the lost & found. */
   | "lostfound.staff.configured"
   /** A system admin changed who is emailed when a claim arrives. `detail`

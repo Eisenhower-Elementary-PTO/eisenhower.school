@@ -900,6 +900,21 @@ export interface Strings {
   lfClaimThanksBody: string;
   lfClaimError: string;
   lfClaimPrivacy: string;
+  /** Nudge under the claim form's contact field: an email address can get an
+   *  automatic note back when the item is returned; anything else is read and
+   *  answered by a person. */
+  lfClaimContactHint: string;
+  /** The return notification — the ONE message the lost & found sends a
+   *  claimant, built by `lostFoundReturnMessage` (lostFoundReturn.ts) for both
+   *  the API's email and the staff dashboard's prefilled text/copy message, in
+   *  the language the claim form was filled in. Names the item and the school,
+   *  NEVER a child: a mistyped contact must not deliver a child's name to a
+   *  stranger. `{item}`, `{school}`. */
+  lfReturnSubject: string;
+  lfReturnBodyClassroom: string;
+  lfReturnBodyOffice: string;
+  lfReturnBodyFamily: string;
+  lfReturnClosing: string;
   /** The public browse page's quiet sign-in link. Submitting an item (any
    *  signed-in member) and the staff screens both start at the same sign-in. */
   lfSignInToAdd: string;
@@ -1820,6 +1835,12 @@ const en: Strings = {
   lfClaimThanksBody: "The office has your note and will be in touch. You can also pick it up from the lost and found.",
   lfClaimError: "That didn't send. Check your name and contact, then try again.",
   lfClaimPrivacy: "Only school staff see what you type here.",
+  lfClaimContactHint: "An email address is best — we can send you a note automatically when it's returned.",
+  lfReturnSubject: "Your lost & found item is on its way: {item}",
+  lfReturnBodyClassroom: "Good news — “{item}” from the {school} lost & found has been sent home through your child's classroom.",
+  lfReturnBodyOffice: "Good news — “{item}” from the {school} lost & found is waiting for you at the front office.",
+  lfReturnBodyFamily: "Good news — “{item}” from the {school} lost & found has been returned to your family.",
+  lfReturnClosing: "If it doesn't turn up, or this doesn't sound right, contact the {school} office.",
   lfStaffEdit: "Edit this item",
   lfSignInToAdd: "Found something? Sign in to add it",
   lfNavSubmit: "Add item",
@@ -2671,6 +2692,12 @@ const es: Strings = {
   lfClaimThanksBody: "La oficina recibió tu mensaje y se pondrá en contacto contigo. También puedes recogerlo en objetos perdidos.",
   lfClaimError: "No se pudo enviar. Revisa tu nombre y tu contacto e inténtalo de nuevo.",
   lfClaimPrivacy: "Solo el personal de la escuela ve lo que escribes aquí.",
+  lfClaimContactHint: "Un correo electrónico es lo mejor: podemos avisarte automáticamente cuando se devuelva.",
+  lfReturnSubject: "Tu objeto perdido va en camino: {item}",
+  lfReturnBodyClassroom: "Buenas noticias: “{item}” de objetos perdidos de {school} se envió a casa con tu hijo o hija a través de su salón.",
+  lfReturnBodyOffice: "Buenas noticias: “{item}” de objetos perdidos de {school} te espera en la oficina de la escuela.",
+  lfReturnBodyFamily: "Buenas noticias: “{item}” de objetos perdidos de {school} se devolvió a tu familia.",
+  lfReturnClosing: "Si no aparece, o algo no cuadra, comunícate con la oficina de {school}.",
   lfStaffEdit: "Editar este objeto",
   lfSignInToAdd: "¿Encontraste algo? Inicia sesión para agregarlo",
   lfNavSubmit: "Agregar",
@@ -3484,6 +3511,12 @@ const zh: Strings = {
   lfClaimThanksBody: "办公室已收到你的留言，会与你联系。你也可以直接到失物招领处领取。",
   lfClaimError: "发送失败。请检查姓名和联系方式后重试。",
   lfClaimPrivacy: "只有学校工作人员能看到你在这里填写的内容。",
+  lfClaimContactHint: "最好留电子邮箱——物品归还后我们可以自动发邮件通知你。",
+  lfReturnSubject: "你的失物正在归还：{item}",
+  lfReturnBodyClassroom: "好消息——{school} 失物招领处的“{item}”已通过孩子的班级送回家。",
+  lfReturnBodyOffice: "好消息——{school} 失物招领处的“{item}”正在学校前台等你领取。",
+  lfReturnBodyFamily: "好消息——{school} 失物招领处的“{item}”已交还给你的家人。",
+  lfReturnClosing: "如果没有收到，或与实际情况不符，请联系 {school} 办公室。",
   lfStaffEdit: "编辑此物品",
   lfSignInToAdd: "捡到东西了？登录即可添加",
   lfNavSubmit: "添加物品",
@@ -4393,6 +4426,12 @@ const so: Strings = {
   lfClaimThanksBody: "Xafiisku wuu helay fariintaada, wayna kula soo xiriiri doonaan. Sidoo kale waxaad ka qaadan kartaa meesha alaabta lumay.",
   lfClaimError: "Lama dirin. Hubi magacaaga iyo xiriirkaaga, kadibna mar kale isku day.",
   lfClaimPrivacy: "Shaqaalaha dugsiga oo keliya ayaa arka waxa aad halkan ku qorto.",
+  lfClaimContactHint: "Iimayl ayaa ugu fiican — waxaan si toos ah kuugu soo diri karnaa ogeysiis marka la soo celiyo.",
+  lfReturnSubject: "Alaabtaadii lumay waa soo socotaa: {item}",
+  lfReturnBodyClassroom: "War wanaagsan — “{item}” oo ka socota alaabta lumay ee {school} waxaa guriga loogu soo diray fasalka ilmahaaga.",
+  lfReturnBodyOffice: "War wanaagsan — “{item}” oo ka socota alaabta lumay ee {school} waxay kugu sugaysaa xafiiska hore ee dugsiga.",
+  lfReturnBodyFamily: "War wanaagsan — “{item}” oo ka socota alaabta lumay ee {school} waxaa loo celiyay qoyskaaga.",
+  lfReturnClosing: "Haddii aysan soo gaarin, ama arrintu sax kula ahayn, la xiriir xafiiska {school}.",
   lfStaffEdit: "Wax ka beddel shaygan",
   lfSignInToAdd: "Wax ma heshay? Gal si aad ugu darto",
   lfNavSubmit: "Ku dar",

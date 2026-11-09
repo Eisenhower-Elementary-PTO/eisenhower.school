@@ -17,7 +17,9 @@ import { Swatch } from "../components/items.js";
 import { Btn } from "../components/atoms.js";
 import { useI18n } from "../i18n/index.js";
 import { useAccess } from "../lib/access.js";
+import { useSession } from "../lib/session.js";
 import { ApiError, api } from "../lib/api.js";
+import { loadClaimDefaults, saveClaimDefaults } from "../lib/claimDraft.js";
 import { categoryLabel, colorLabel, formatDay } from "../lib/lf.js";
 
 export function Item() {
@@ -131,17 +133,32 @@ function Facts({ item }: { item: LfPublicItemDTO }) {
 }
 
 function ClaimPanel({ itemId }: { itemId: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { me, displayName } = useSession();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [childName, setChildName] = useState("");
-  const [teacher, setTeacher] = useState("");
+  // Starts from what this device remembers (lib/claimDraft.ts) — the same
+  // family loses things all year, and retyping a contact on a phone is where
+  // the typos come from. A signed-in member's session fills the gaps below.
+  const [defaults] = useState(loadClaimDefaults);
+  const [name, setName] = useState(defaults.name);
+  const [contact, setContact] = useState(defaults.contact);
+  const [childName, setChildName] = useState(defaults.childName);
+  const [teacher, setTeacher] = useState(defaults.teacher);
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(false);
+
+  // Signed in: offer the account email — it has already received a magic link,
+  // and the server marks a claim typed with it as verified. Only fields still
+  // empty are filled; anything typed (or remembered) wins.
+  useEffect(() => {
+    if (!me) return;
+    const email = me.user.email;
+    setContact((v) => v || email);
+    if (displayName && displayName !== email) setName((v) => v || displayName);
+  }, [me, displayName]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +169,20 @@ function ClaimPanel({ itemId }: { itemId: string }) {
     setBusy(true);
     setError(false);
     try {
-      await api.claim(itemId, { name, contact, childName, teacher, message, website });
+      // `lang` is the language this form was read in — what the return
+      // notification will answer in (migration 0044).
+      await api.claim(itemId, { name, contact, childName, teacher, message, website, lang: locale });
+      // Remember the stable fields on this device for the next claim — but
+      // only signed OUT: a signed-in member prefills from their session, and a
+      // shared family device shouldn't offer one parent's details to the other.
+      if (!me) {
+        saveClaimDefaults({
+          name: name.trim(),
+          contact: contact.trim(),
+          childName: childName.trim(),
+          teacher: teacher.trim(),
+        });
+      }
       setSent(true);
     } catch {
       setError(true);
@@ -201,6 +231,7 @@ function ClaimPanel({ itemId }: { itemId: string }) {
             autoComplete="email"
             required
           />
+          <p className="sd-meta" style={{ margin: 0 }}>{t("lfClaimContactHint")}</p>
           {/* Whose child it is and their teacher, so the office can send the
               item home through the classroom. Optional: the item may be the
               claimant's own, or they may not know the room. */}

@@ -213,6 +213,8 @@ export function Edit() {
                       <div className="sd-meta">
                         {formatDayTime(c.createdAt, locale)}
                         {c.resolution && ` · ${c.resolution}`}
+                        {c.contactVerified && " · verified account email"}
+                        {c.notifiedAt && ` · emailed ${formatDayTime(c.notifiedAt, locale)}`}
                       </div>
                     </div>
                   ))}

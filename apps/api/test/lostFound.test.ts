@@ -9,6 +9,7 @@
 // that forgets `requireStaff` is exactly what nothing else will notice.
 
 import { Hono } from "hono";
+import { lfContactIsEmail, lfContactPhone, lostFoundReturnMessage } from "@sd/shared";
 import { describe, expect, it } from "vitest";
 import type { AuthContext, HonoEnv } from "../src/env.js";
 import type { AuditDraft } from "../src/lib/audit.js";
@@ -29,6 +30,7 @@ import {
   searchTextOf,
   searchWords,
   tagItem,
+  type LfClaimRow,
   type LfItemRow,
 } from "../src/lib/lostFound.js";
 import { lostFound } from "../src/routes/lostFound.js";
@@ -146,6 +148,7 @@ const STAFF_ROUTES: Array<[string, string, unknown?]> = [
   ["GET", "/lostfound/claims"],
   ["GET", "/lostfound/media/01ITEM.jpg"],
   ["POST", "/lostfound/claims/01CLAIM/dismiss", {}],
+  ["POST", "/lostfound/claims/01CLAIM/return", { method: "classroom" }],
   ["POST", "/lostfound/retag-failed", {}],
 ];
 
@@ -685,14 +688,18 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     message: "Dent on the bottom",
   };
 
-  async function post(body: unknown, opts: Parameters<typeof claimEnv>[0] = {}) {
+  async function post(
+    body: unknown,
+    opts: Parameters<typeof claimEnv>[0] = {},
+    session: AuthContext | null = null,
+  ) {
     const audit: AuditDraft[] = [];
     const { env, writes, sent } = claimEnv(opts);
     // Collect waitUntil promises so the notification (fired after the row
     // commits) has finished before anything is asserted.
     const pending: Promise<unknown>[] = [];
     const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p) } as unknown as ExecutionContext;
-    const res = await appWith(null, audit).request(
+    const res = await appWith(session, audit).request(
       "/lostfound-public/items/01ITEM/claims",
       { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } },
       env,
@@ -701,6 +708,9 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     await Promise.all(pending);
     return { status: res.status, json: await res.json(), writes, audit, sent };
   }
+
+  /** The INSERT's bind values back out of the write log. */
+  const argsOf = (w: string) => JSON.parse(w.slice(w.indexOf("["))) as unknown[];
 
   it("stores a claim, audits it with no claimant details, and answers ok", async () => {
     const r = await post(claim);
@@ -757,6 +767,26 @@ describe("POST /lostfound-public/items/:id/claims", () => {
   it("refuses a claim with no name or contact — about the caller's own input only", async () => {
     expect((await post({ name: "", contact: "pat@example.com" })).status).toBe(400);
     expect((await post({ name: "Pat", contact: "" })).status).toBe(400);
+  });
+
+  it("records the form's language, BUCKETED to LOCALES — never free text (migration 0044)", async () => {
+    const es = await post({ ...claim, lang: "es" });
+    expect(argsOf(es.writes[0]!)[8]).toBe("es");
+    for (const lang of ["xx-pirate", "<script>", 42, undefined]) {
+      const r = await post({ ...claim, lang });
+      expect(argsOf(r.writes[0]!)[8]).toBe("en");
+    }
+  });
+
+  it("marks the contact verified only when it IS the signed-in account's email", async () => {
+    const me = auth("01U_PARENT"); // email 01U_PARENT@eisenhower.edu
+    // Their own address, case aside → verified.
+    const match = await post({ ...claim, contact: "01U_PARENT@EISENHOWER.edu" }, {}, me);
+    expect(argsOf(match.writes[0]!)[9]).toBe(1);
+    // Signed in but a different contact → not verified.
+    expect(argsOf((await post(claim, {}, me)).writes[0]!)[9]).toBe(0);
+    // Anonymous → not verified.
+    expect(argsOf((await post(claim)).writes[0]!)[9]).toBe(0);
   });
 });
 
@@ -1080,5 +1110,197 @@ describe("POST /lostfound/items/bulk", () => {
       expect(writes).toEqual([]);
       expect(audit).toEqual([]);
     }
+  });
+});
+
+// ── Returning an item against a claim, and telling the family ───────────────
+// The notify route (migration 0044): the same guarded return transition the
+// item routes run, then ONE email to the claimant — claimed by CAS on
+// `notified_at`, released on a failed send, in the claim's own language,
+// naming the item and never a child.
+
+function claimJoinRow(over: Partial<LfClaimRow & { item_title: string }> = {}): LfClaimRow & { item_title: string } {
+  return {
+    id: "01CLAIM",
+    item_id: "01ITEM",
+    name: "Pat",
+    contact: "pat@example.com",
+    child_name: "Milo",
+    teacher: "Ms. Shrestha",
+    message: "Dent on the bottom",
+    lang: "en",
+    contact_verified: 0,
+    notified_at: null,
+    created_at: "2026-11-01T15:00:00.000Z",
+    resolved_at: null,
+    resolution: null,
+    item_title: "Blue water bottle",
+    ...over,
+  };
+}
+
+function returnEnv(opts: {
+  claim?: Partial<LfClaimRow & { item_title: string }> | null;
+  itemChanges?: number;
+  notifyChanges?: number;
+  sendFails?: boolean;
+} = {}) {
+  const writes: { sql: string; args: unknown[] }[] = [];
+  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
+  type Stmt = { run: () => Promise<{ meta: { changes: number } }> };
+  const env = {
+    BULK_EMAIL_FROM: "Lost & Found <lostfound@sitemail.eisenhower.school>",
+    EMAIL: {
+      send: async (msg: (typeof sent)[number]) => {
+        if (opts.sendFails) throw new Error("smtp down");
+        sent.push(msg);
+      },
+    },
+    SCHOOL_NAME: "Eisenhower PTO",
+    DB: {
+      prepare(sql: string) {
+        return {
+          bind: (...args: unknown[]) => ({
+            async first() {
+              if (sql.includes("FROM setting")) return { value: GROUP };
+              if (sql.includes("FROM grp")) return { id: GROUP, name: "Front office" };
+              if (sql.includes("FROM membership m")) return { ok: 1 };
+              if (sql.includes("FROM lf_claim cl JOIN lf_item")) {
+                return opts.claim === null ? null : claimJoinRow(opts.claim);
+              }
+              throw new Error(`returnEnv: unhandled first: ${sql}`);
+            },
+            async run() {
+              writes.push({ sql, args });
+              if (sql.includes("UPDATE lf_item")) return { meta: { changes: opts.itemChanges ?? 1 } };
+              if (sql.includes("SET notified_at = ?")) return { meta: { changes: opts.notifyChanges ?? 1 } };
+              return { meta: { changes: 1 } };
+            },
+          }),
+        };
+      },
+      async batch(stmts: Stmt[]) {
+        const out = [];
+        for (const s of stmts) out.push(await s.run());
+        return out;
+      },
+    },
+  } as unknown as HonoEnv["Bindings"];
+  return { env, writes, sent };
+}
+
+describe("POST /lostfound/claims/:id/return", () => {
+  async function post(body: unknown, opts: Parameters<typeof returnEnv>[0] = {}) {
+    const audit: AuditDraft[] = [];
+    const fake = returnEnv(opts);
+    const res = await call(appWith(auth("01U_STAFF"), audit), "POST", "/lostfound/claims/01CLAIM/return", body, fake.env);
+    return { status: res.status, json: await res.json(), audit, ...fake };
+  }
+
+  it("marks the item returned, settles its claims, and emails the claimant — in the claim's language, naming no child", async () => {
+    const r = await post({ method: "classroom" }, { claim: { lang: "es" } });
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ ok: true, notified: true });
+    // The same guarded transition the item route runs…
+    expect(r.writes.some((w) => w.sql.includes("SET status = 'returned'") && w.sql.includes("AND status = 'found'"))).toBe(true);
+    // …settling every open claim on the item…
+    expect(r.writes.some((w) => w.sql.includes("resolution = 'returned'"))).toBe(true);
+    // …and the CAS claim on the send, so a double-tap mails nobody twice.
+    expect(r.writes.some((w) => w.sql.includes("SET notified_at = ? WHERE id = ? AND notified_at IS NULL"))).toBe(true);
+    expect(r.sent).toHaveLength(1);
+    expect(r.sent[0]!.to).toBe("pat@example.com");
+    // The claim was filled in Spanish; the answer is Spanish.
+    expect(r.sent[0]!.subject).toContain("camino");
+    expect(r.sent[0]!.text).toContain("Blue water bottle");
+    // Item and school only — never the claimant, the child, the room or the
+    // message (a mistyped address must not deliver a child's name).
+    expect(`${r.sent[0]!.subject} ${r.sent[0]!.text} ${r.sent[0]!.html}`).not.toMatch(/Pat|Milo|Shrestha|Dent/);
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned", "lostfound.claim.return_notified"]);
+    expect(r.audit[1]!.detail).toEqual({ itemId: "01ITEM", method: "classroom" });
+    // Claimant fields never reach a row that lives forever (migration 0043's rule).
+    expect(JSON.stringify(r.audit)).not.toMatch(/Pat|example\.com|Milo|Shrestha|Dent/);
+  });
+
+  it("notify: false marks returned and mails nobody", async () => {
+    const r = await post({ method: "office", notify: false });
+    expect(r.json).toEqual({ ok: true, notified: false });
+    expect(r.sent).toEqual([]);
+    expect(r.writes.some((w) => w.sql.includes("notified_at"))).toBe(false);
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
+  });
+
+  it("a non-email contact is never mailed — the manual links are the path", async () => {
+    const r = await post({ method: "classroom" }, { claim: { contact: "612-555-0100 after 3pm" } });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "not_email" });
+    expect(r.sent).toEqual([]);
+    expect(r.writes.some((w) => w.sql.includes("notified_at"))).toBe(false);
+  });
+
+  it("an already-notified claim mails nobody twice (the CAS lost)", async () => {
+    const r = await post({ method: "classroom" }, { notifyChanges: 0 });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "already_notified" });
+    expect(r.sent).toEqual([]);
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
+  });
+
+  it("a failed send releases its own claim — matched by value — and records no notification", async () => {
+    const r = await post({ method: "classroom" }, { sendFails: true });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "send_failed" });
+    const release = r.writes.find((w) => w.sql.includes("SET notified_at = NULL"));
+    expect(release).toBeDefined();
+    expect(release!.sql).toContain("AND notified_at = ?");
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
+  });
+
+  it("an item already returned (the transition's CAS lost) still notifies, and re-audits nothing", async () => {
+    const r = await post({ method: "office" }, { itemChanges: 0 });
+    expect(r.json).toEqual({ ok: true, notified: true });
+    expect(r.sent).toHaveLength(1);
+    // No second lostfound.item.returned, and the claim-settling batch never ran.
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.claim.return_notified"]);
+    expect(r.writes.some((w) => w.sql.includes("resolution = 'returned'"))).toBe(false);
+  });
+
+  it("refuses an unknown method and a missing claim", async () => {
+    expect((await post({ method: "donate" })).status).toBe(400);
+    expect((await post({})).status).toBe(400);
+    expect((await post({ method: "classroom" }, { claim: null })).status).toBe(404);
+  });
+});
+
+// ── The shared return message ───────────────────────────────────────────────
+
+describe("lostFoundReturnMessage (@sd/shared)", () => {
+  it("renders subject and body in the claim's language, naming the item and the school", () => {
+    for (const [locale, probe] of [
+      ["en", "on its way"],
+      ["es", "camino"],
+      ["zh", "正在归还"],
+      ["so", "soo socotaa"],
+    ] as const) {
+      const m = lostFoundReturnMessage(locale, "classroom", "Blue water bottle");
+      expect(m.subject).toContain(probe);
+      expect(m.subject).toContain("Blue water bottle");
+      expect(m.body).toContain("Blue water bottle");
+      expect(m.body).toContain("Eisenhower");
+    }
+  });
+
+  it("each method gets its own sentence", () => {
+    const bodies = (["classroom", "office", "family"] as const).map(
+      (m) => lostFoundReturnMessage("en", m, "Blue water bottle").body,
+    );
+    expect(new Set(bodies).size).toBe(3);
+  });
+
+  it("the contact-shape rules behind 'email them' vs the manual links", () => {
+    expect(lfContactIsEmail("pat@example.com")).toBe(true);
+    expect(lfContactIsEmail(" pat@example.com ")).toBe(true);
+    expect(lfContactIsEmail("612-555-0100")).toBe(false);
+    expect(lfContactIsEmail("pat at example")).toBe(false);
+    expect(lfContactPhone("(612) 555-0100")).toBe("6125550100");
+    expect(lfContactPhone("+1 612.555.0100")).toBe("+16125550100");
+    expect(lfContactPhone("pat@example.com")).toBeNull();
+    expect(lfContactPhone("call me")).toBeNull();
   });
 });

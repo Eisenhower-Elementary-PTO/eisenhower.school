@@ -8,7 +8,8 @@
 // Resend, the original channel and then the fallback, was retired entirely
 // on 2026-11-05 (secret deleted; this file stopped knowing how to call it).
 
-import { escapeHtml } from "@sd/shared";
+import { escapeHtml, lostFoundReturnMessage } from "@sd/shared";
+import type { Locale, LfReturnMethod } from "@sd/shared";
 import type { Env } from "../env.js";
 
 export interface SendArgs {
@@ -369,6 +370,27 @@ You're getting this because your address is on the lost & found's claim notifica
 <p>Their name and how to reach them are on the claims queue:</p>
 <p><a href="${queue}">Open the claims queue</a></p>
 <p style="color:#56636f;font-size:13px">You're getting this because your address is on the lost &amp; found's claim notifications. A system admin can change the list in Lost &amp; found → Admin.</p>`,
+  };
+}
+
+/**
+ * To a claimant, when staff mark their item returned (routes/lostFound.ts's
+ * claim return route). The one mail the lost & found sends a family.
+ *
+ * The words come from `lostFoundReturnMessage` in @sd/shared — the same
+ * builder behind the staff dashboard's prefilled text message, rendered in the
+ * language the claim form was filled in. It names the item and the school,
+ * never a child: the recipient address was typed free-hand on a public form,
+ * and a typo must not deliver a child's name and room to a stranger.
+ */
+export function lostFoundReturnEmail(lang: Locale, method: LfReturnMethod, itemTitle: string): SendArgs {
+  const { subject, body } = lostFoundReturnMessage(lang, method, itemTitle);
+  const [lead = "", closing = ""] = body.split("\n\n");
+  return {
+    to: "",
+    subject,
+    text: body,
+    html: `<p>${esc(lead)}</p>\n<p style="color:#56636f;font-size:13px">${esc(closing)}</p>`,
   };
 }
 
