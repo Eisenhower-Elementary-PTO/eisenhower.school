@@ -55,7 +55,7 @@ import {
   type LfStaffRow,
 } from "../lib/lostFound.js";
 import { genericGroups, groupExists } from "../lib/rosterGate.js";
-import { lostFoundReturnEmail, sendEmailResult } from "../lib/email.js";
+import { bindingChannelOn, lostFoundReturnEmail, sendEmailResult } from "../lib/email.js";
 import { DAYS, nowIso } from "../lib/time.js";
 import { LF_CLAIM_NOTIFY_MAX, LF_DONATE_AFTER_DAYS, isLfReturnMethod, lfClaimLocale, lfContactIsEmail } from "@sd/shared";
 import type { AuditAction } from "@sd/shared";
@@ -583,13 +583,26 @@ lostFound.get(
  *  The send is claimed by CAS on `notified_at` (migration 0044;
  *  `reminder_sent_at`'s pattern) so a double-tap mails nobody twice, and a
  *  failed send releases its own claim — matched by value — so staff can retry
- *  or fall back to the manual links. The audit draft is pushed only for a
+ *  or fall back to the manual links. (A double fault — the release itself
+ *  failing, or the isolate dying between CAS and send — strands the claim as
+ *  notified-but-unmailed; accepted: unlike the reminder cron there is no
+ *  retry owner here, and the stake is one missed courtesy email on an item
+ *  the family can still see returned.) The audit draft is pushed only for a
  *  send that happened: the action records the NOTIFICATION, and a failed one
  *  leaves no durable write behind (the release undoes the CAS). `detail`
  *  carries the item id and method only — claimant fields never reach a row
  *  that lives forever (migration 0043's rule). Synchronous rather than
  *  `waitUntil`, because the dashboard needs to know whether to offer the
- *  manual fallback. */
+ *  manual fallback — which is also why a mail channel that is off answers
+ *  `channel_off` instead of letting `sendEmailResult`'s log-and-report-ok
+ *  contract tell a human "emailed them" about a message nobody got.
+ *
+ *  Refusals: an unknown method (400), a missing claim (404), and a DISMISSED
+ *  claim (409) — staff judged that person not the owner, and a stale second
+ *  tab must not mail them "good news". Every success carries
+ *  `otherOpenClaims`: the return settles the item's other open claims with no
+ *  message of their own, and the dashboard tells staff someone else is still
+ *  waiting to hear. */
 lostFound.post(
   "/claims/:id/return",
   guarded(async (c) => {
@@ -610,6 +623,25 @@ lostFound.post(
       .bind(id)
       .first<LfClaimRow & { item_title: string }>();
     if (!claim) return c.json({ error: "not_found" }, 404);
+    // A dismissed claim was judged NOT the owner — returning the item against
+    // it would mail "good news, it's on its way" to exactly the person staff
+    // decided it doesn't belong to (a stale tab, or a double-handled queue).
+    // The item itself can still be returned from its own routes.
+    if (claim.resolution === "dismissed") {
+      return c.json({ error: "dismissed", message: "This claim was dismissed. Return the item from its page instead." }, 409);
+    }
+
+    // The return below settles every OTHER open claim on this item as
+    // 'returned' too — silently, from those families' point of view. The count
+    // rides every response so the dashboard can tell staff someone else is
+    // still waiting on a message (their contacts stay readable on the item
+    // page). Counted BEFORE the transition, which is what resolves them.
+    const others =
+      (
+        await c.env.DB.prepare("SELECT COUNT(*) AS n FROM lf_claim WHERE item_id = ? AND resolved_at IS NULL AND id <> ?")
+          .bind(claim.item_id, id)
+          .first<{ n: number }>()
+      )?.n ?? 0;
 
     const t = TRANSITIONS.return!;
     const res = await c.env.DB.prepare(t.sql).bind(nowIso(), claim.item_id).run();
@@ -619,8 +651,18 @@ lostFound.post(
       c.executionCtx.waitUntil(syncVector(c.env, claim.item_id));
     }
 
-    if (!wantNotify) return c.json({ ok: true, notified: false });
-    if (!lfContactIsEmail(claim.contact)) return c.json({ ok: true, notified: false, reason: "not_email" });
+    if (!wantNotify) return c.json({ ok: true, notified: false, otherOpenClaims: others });
+    if (!lfContactIsEmail(claim.contact)) {
+      return c.json({ ok: true, notified: false, reason: "not_email", otherOpenClaims: others });
+    }
+    // With the mail channel off or half-configured, `sendEmailResult` LOGS the
+    // message and reports it accepted — the right contract for magic links,
+    // the wrong one here, where a human reads "emailed them" and skips the
+    // manual fallback. Answer honestly and leave `notified_at` unset so fixing
+    // the channel lets this claim be notified for real.
+    if (!bindingChannelOn(c.env)) {
+      return c.json({ ok: true, notified: false, reason: "channel_off", otherOpenClaims: others });
+    }
 
     const now = nowIso();
     const claimed = await c.env.DB.prepare(
@@ -629,7 +671,7 @@ lostFound.post(
       .bind(now, id)
       .run();
     if ((claimed.meta?.changes ?? 0) === 0) {
-      return c.json({ ok: true, notified: false, reason: "already_notified" });
+      return c.json({ ok: true, notified: false, reason: "already_notified", otherOpenClaims: others });
     }
 
     const msg = lostFoundReturnEmail(lfClaimLocale(claim.lang), method, claim.item_title);
@@ -638,7 +680,7 @@ lostFound.post(
       await c.env.DB.prepare("UPDATE lf_claim SET notified_at = NULL WHERE id = ? AND notified_at = ?")
         .bind(id, now)
         .run();
-      return c.json({ ok: true, notified: false, reason: "send_failed" });
+      return c.json({ ok: true, notified: false, reason: "send_failed", otherOpenClaims: others });
     }
     c.var.audit.push({
       action: "lostfound.claim.return_notified",
@@ -646,7 +688,7 @@ lostFound.post(
       entityId: id,
       detail: { itemId: claim.item_id, method },
     });
-    return c.json({ ok: true, notified: true });
+    return c.json({ ok: true, notified: true, otherOpenClaims: others });
   }),
 );
 

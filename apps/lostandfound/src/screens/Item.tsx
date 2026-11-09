@@ -134,31 +134,40 @@ function Facts({ item }: { item: LfPublicItemDTO }) {
 
 function ClaimPanel({ itemId }: { itemId: string }) {
   const { t, locale } = useI18n();
-  const { me, displayName } = useSession();
+  const { me, displayName, loading: sessionLoading } = useSession();
   const [open, setOpen] = useState(false);
-  // Starts from what this device remembers (lib/claimDraft.ts) — the same
-  // family loses things all year, and retyping a contact on a phone is where
-  // the typos come from. A signed-in member's session fills the gaps below.
-  const [defaults] = useState(loadClaimDefaults);
-  const [name, setName] = useState(defaults.name);
-  const [contact, setContact] = useState(defaults.contact);
-  const [childName, setChildName] = useState(defaults.childName);
-  const [teacher, setTeacher] = useState(defaults.teacher);
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [childName, setChildName] = useState("");
+  const [teacher, setTeacher] = useState("");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(false);
 
-  // Signed in: offer the account email — it has already received a magic link,
-  // and the server marks a claim typed with it as verified. Only fields still
-  // empty are filled; anything typed (or remembered) wins.
+  // Prefill, once the session question is answered — and not before, so the
+  // two sources can't race. Signed in: the account email (it has already
+  // received a magic link, and the server marks a claim typed with it as
+  // verified). Signed out: what this device remembers (lib/claimDraft.ts) —
+  // the same family loses things all year. NEVER the remembered values while
+  // signed in: on a shared family device they may be the OTHER parent's, and
+  // a notification would go to the wrong inbox. Only empty fields are filled;
+  // anything typed wins.
   useEffect(() => {
-    if (!me) return;
-    const email = me.user.email;
-    setContact((v) => v || email);
-    if (displayName && displayName !== email) setName((v) => v || displayName);
-  }, [me, displayName]);
+    if (sessionLoading) return;
+    if (me) {
+      const email = me.user.email;
+      setContact((v) => v || email);
+      if (displayName && displayName !== email) setName((v) => v || displayName);
+    } else {
+      const d = loadClaimDefaults();
+      setName((v) => v || d.name);
+      setContact((v) => v || d.contact);
+      setChildName((v) => v || d.childName);
+      setTeacher((v) => v || d.teacher);
+    }
+  }, [sessionLoading, me, displayName]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,9 +182,10 @@ function ClaimPanel({ itemId }: { itemId: string }) {
       // notification will answer in (migration 0044).
       await api.claim(itemId, { name, contact, childName, teacher, message, website, lang: locale });
       // Remember the stable fields on this device for the next claim — but
-      // only signed OUT: a signed-in member prefills from their session, and a
-      // shared family device shouldn't offer one parent's details to the other.
-      if (!me) {
+      // only KNOWN signed out: a signed-in member prefills from their session,
+      // and a shared family device shouldn't offer one parent's details to the
+      // other (nor save anything while the session is still being resolved).
+      if (!sessionLoading && !me) {
         saveClaimDefaults({
           name: name.trim(),
           contact: contact.trim(),

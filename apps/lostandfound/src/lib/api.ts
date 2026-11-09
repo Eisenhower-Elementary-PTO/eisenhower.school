@@ -180,12 +180,18 @@ export const api = {
   /** The item went home against THIS claim. Marks the item returned and, when
    *  `notify` and the contact is an email address, mails the claimant — in the
    *  claim's own language, naming the item and never a child. `notified:
-   *  false` with a `reason` means fall back to the manual links. */
+   *  false` with a `reason` means fall back to the manual links.
+   *  `otherOpenClaims` counts the item's OTHER open claims the return settled
+   *  with no message of their own — people the dashboard should point staff
+   *  at. A dismissed claim is refused (409): staff judged that person not the
+   *  owner. */
   returnClaim: (id: string, method: LfReturnMethod, notify: boolean) =>
-    request<{ ok: true; notified: boolean; reason?: "not_email" | "already_notified" | "send_failed" }>(
-      `/lostfound/claims/${encodeURIComponent(id)}/return`,
-      post({ method, notify }),
-    ),
+    request<{
+      ok: true;
+      notified: boolean;
+      reason?: "not_email" | "already_notified" | "send_failed" | "channel_off";
+      otherOpenClaims: number;
+    }>(`/lostfound/claims/${encodeURIComponent(id)}/return`, post({ method, notify })),
 
   // ── Settings (system admin) ──
   groups: () => request<{ groups: { id: string; name: string; memberCount: number }[] }>("/lostfound/groups"),

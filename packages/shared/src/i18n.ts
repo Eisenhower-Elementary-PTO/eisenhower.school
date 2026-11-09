@@ -915,6 +915,10 @@ export interface Strings {
   lfReturnBodyOffice: string;
   lfReturnBodyFamily: string;
   lfReturnClosing: string;
+  /** Stands in for `{item}` when the item has no title (the AI failed and
+   *  staff published anyway) — prose, unlike `lfDescribing`, which is the
+   *  browse grid's progress placeholder and reads absurd in an email. */
+  lfReturnItemFallback: string;
   /** The public browse page's quiet sign-in link. Submitting an item (any
    *  signed-in member) and the staff screens both start at the same sign-in. */
   lfSignInToAdd: string;
@@ -1841,6 +1845,7 @@ const en: Strings = {
   lfReturnBodyOffice: "Good news — “{item}” from the {school} lost & found is waiting for you at the front office.",
   lfReturnBodyFamily: "Good news — “{item}” from the {school} lost & found has been returned to your family.",
   lfReturnClosing: "If it doesn't turn up, or this doesn't sound right, contact the {school} office.",
+  lfReturnItemFallback: "the item you claimed",
   lfStaffEdit: "Edit this item",
   lfSignInToAdd: "Found something? Sign in to add it",
   lfNavSubmit: "Add item",
@@ -2698,6 +2703,7 @@ const es: Strings = {
   lfReturnBodyOffice: "Buenas noticias: “{item}” de objetos perdidos de {school} te espera en la oficina de la escuela.",
   lfReturnBodyFamily: "Buenas noticias: “{item}” de objetos perdidos de {school} se devolvió a tu familia.",
   lfReturnClosing: "Si no aparece, o algo no cuadra, comunícate con la oficina de {school}.",
+  lfReturnItemFallback: "el objeto que reclamaste",
   lfStaffEdit: "Editar este objeto",
   lfSignInToAdd: "¿Encontraste algo? Inicia sesión para agregarlo",
   lfNavSubmit: "Agregar",
@@ -3517,6 +3523,7 @@ const zh: Strings = {
   lfReturnBodyOffice: "好消息——{school} 失物招领处的“{item}”正在学校前台等你领取。",
   lfReturnBodyFamily: "好消息——{school} 失物招领处的“{item}”已交还给你的家人。",
   lfReturnClosing: "如果没有收到，或与实际情况不符，请联系 {school} 办公室。",
+  lfReturnItemFallback: "你认领的物品",
   lfStaffEdit: "编辑此物品",
   lfSignInToAdd: "捡到东西了？登录即可添加",
   lfNavSubmit: "添加物品",
@@ -4432,6 +4439,7 @@ const so: Strings = {
   lfReturnBodyOffice: "War wanaagsan — “{item}” oo ka socota alaabta lumay ee {school} waxay kugu sugaysaa xafiiska hore ee dugsiga.",
   lfReturnBodyFamily: "War wanaagsan — “{item}” oo ka socota alaabta lumay ee {school} waxaa loo celiyay qoyskaaga.",
   lfReturnClosing: "Haddii aysan soo gaarin, ama arrintu sax kula ahayn, la xiriir xafiiska {school}.",
+  lfReturnItemFallback: "alaabta aad sheegatay",
   lfStaffEdit: "Wax ka beddel shaygan",
   lfSignInToAdd: "Wax ma heshay? Gal si aad ugu darto",
   lfNavSubmit: "Ku dar",

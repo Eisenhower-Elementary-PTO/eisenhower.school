@@ -116,8 +116,13 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
     // signed-in member's claim carries their cookie. When the contact they
     // typed IS their account email, the row records it as verified — that
     // address has already received a magic link. Their own session, their own
-    // address: it discloses nothing and gates nothing (migration 0044).
-    const verified = c.var.auth && c.var.auth.email.toLowerCase() === contact.trim().toLowerCase() ? 1 : 0;
+    // address: it discloses nothing and gates nothing (migration 0044). Never
+    // while masquerading — the chip means "the claimant was signed in with
+    // this address", and an admin reproducing a bug as a member isn't that.
+    const verified =
+      c.var.auth && !c.var.auth.isMasquerading && c.var.auth.email.toLowerCase() === contact.trim().toLowerCase()
+        ? 1
+        : 0;
     // `contact` as typed — "after 3pm, 612-555-0100 ext 5" is for a person to
     // read — and the normalized key beside it for the cap above.
     await c.env.DB.prepare(

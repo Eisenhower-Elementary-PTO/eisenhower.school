@@ -55,7 +55,7 @@ export function lostFoundReturnMessage(locale: Locale, method: LfReturnMethod, i
   // which names the PTO and would misname the school's own front office. It
   // also keeps this builder callable from the browser, where no env exists.
   const d = dictionaries[locale];
-  const vars = { item: itemTitle.trim() || d.lfDescribing, school: d.brand };
+  const vars = { item: itemTitle.trim() || d.lfReturnItemFallback, school: d.brand };
   return {
     subject: interpolate(d.lfReturnSubject, vars),
     body: `${interpolate(d[BODY_KEY[method]], vars)}\n\n${interpolate(d.lfReturnClosing, vars)}`,

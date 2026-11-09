@@ -1134,10 +1134,15 @@ Worker, sharing one session:
      send is a CAS on `notified_at` (`reminder_sent_at`'s pattern); a failed
      send releases its own claim, matched by value.
      `lostfound.claim.return_notified` carries item id + method only and is
-     Slack-silent. The claim form PREFILLS: a signed-in member's account email
-     (recorded as `contact_verified` when the typed contact matches — a chip
-     for staff, granting and gating nothing), else what this device last
-     submitted (localStorage, written only signed-out; `lib/claimDraft.ts`).
+     Slack-silent. A DISMISSED claim is refused (409) — staff judged that
+     person not the owner; every response counts the item's OTHER open claims
+     (the return settles them messageless, and the dashboard says someone is
+     still waiting to hear); a mail channel that is off answers `channel_off`,
+     never "emailed them" about a logged message. The claim form PREFILLS: a
+     signed-in member's account email (recorded as `contact_verified` when the
+     typed contact matches, never while masquerading — a chip for staff,
+     granting and gating nothing), else what this device last submitted
+     (localStorage, written only KNOWN signed-out; `lib/claimDraft.ts`).
    Staff are a ROSTER (`lostfound_staff_group_id`, `rosterAccess` — invariant
    31), never the self-assertable `staff` capability. Photos live in
    `LOSTFOUND_MEDIA`, its own bucket behind a public route, so it can never

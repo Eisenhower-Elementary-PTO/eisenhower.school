@@ -787,6 +787,10 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     expect(argsOf((await post(claim, {}, me)).writes[0]!)[9]).toBe(0);
     // Anonymous → not verified.
     expect(argsOf((await post(claim)).writes[0]!)[9]).toBe(0);
+    // A masquerading admin typing the member's address → not verified: the
+    // chip means the CLAIMANT was signed in with it, and this one wasn't.
+    const masq = await post({ ...claim, contact: "01U_PARENT@eisenhower.edu" }, {}, { ...me, isMasquerading: true });
+    expect(argsOf(masq.writes[0]!)[9]).toBe(0);
   });
 });
 
@@ -1144,18 +1148,26 @@ function returnEnv(opts: {
   itemChanges?: number;
   notifyChanges?: number;
   sendFails?: boolean;
+  /** The item's OTHER open claims (the count the route reports). */
+  others?: number;
+  /** Leave the mail channel unconfigured — the route must say so, not "sent". */
+  channelOff?: boolean;
 } = {}) {
   const writes: { sql: string; args: unknown[] }[] = [];
   const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
   type Stmt = { run: () => Promise<{ meta: { changes: number } }> };
   const env = {
-    BULK_EMAIL_FROM: "Lost & Found <lostfound@sitemail.eisenhower.school>",
-    EMAIL: {
-      send: async (msg: (typeof sent)[number]) => {
-        if (opts.sendFails) throw new Error("smtp down");
-        sent.push(msg);
-      },
-    },
+    ...(opts.channelOff
+      ? {}
+      : {
+          BULK_EMAIL_FROM: "Lost & Found <lostfound@sitemail.eisenhower.school>",
+          EMAIL: {
+            send: async (msg: (typeof sent)[number]) => {
+              if (opts.sendFails) throw new Error("smtp down");
+              sent.push(msg);
+            },
+          },
+        }),
     SCHOOL_NAME: "Eisenhower PTO",
     DB: {
       prepare(sql: string) {
@@ -1168,6 +1180,7 @@ function returnEnv(opts: {
               if (sql.includes("FROM lf_claim cl JOIN lf_item")) {
                 return opts.claim === null ? null : claimJoinRow(opts.claim);
               }
+              if (sql.includes("SELECT COUNT(*) AS n FROM lf_claim")) return { n: opts.others ?? 0 };
               throw new Error(`returnEnv: unhandled first: ${sql}`);
             },
             async run() {
@@ -1200,7 +1213,7 @@ describe("POST /lostfound/claims/:id/return", () => {
   it("marks the item returned, settles its claims, and emails the claimant — in the claim's language, naming no child", async () => {
     const r = await post({ method: "classroom" }, { claim: { lang: "es" } });
     expect(r.status).toBe(200);
-    expect(r.json).toEqual({ ok: true, notified: true });
+    expect(r.json).toEqual({ ok: true, notified: true, otherOpenClaims: 0 });
     // The same guarded transition the item route runs…
     expect(r.writes.some((w) => w.sql.includes("SET status = 'returned'") && w.sql.includes("AND status = 'found'"))).toBe(true);
     // …settling every open claim on the item…
@@ -1223,7 +1236,7 @@ describe("POST /lostfound/claims/:id/return", () => {
 
   it("notify: false marks returned and mails nobody", async () => {
     const r = await post({ method: "office", notify: false });
-    expect(r.json).toEqual({ ok: true, notified: false });
+    expect(r.json).toEqual({ ok: true, notified: false, otherOpenClaims: 0 });
     expect(r.sent).toEqual([]);
     expect(r.writes.some((w) => w.sql.includes("notified_at"))).toBe(false);
     expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
@@ -1231,21 +1244,21 @@ describe("POST /lostfound/claims/:id/return", () => {
 
   it("a non-email contact is never mailed — the manual links are the path", async () => {
     const r = await post({ method: "classroom" }, { claim: { contact: "612-555-0100 after 3pm" } });
-    expect(r.json).toEqual({ ok: true, notified: false, reason: "not_email" });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "not_email", otherOpenClaims: 0 });
     expect(r.sent).toEqual([]);
     expect(r.writes.some((w) => w.sql.includes("notified_at"))).toBe(false);
   });
 
   it("an already-notified claim mails nobody twice (the CAS lost)", async () => {
     const r = await post({ method: "classroom" }, { notifyChanges: 0 });
-    expect(r.json).toEqual({ ok: true, notified: false, reason: "already_notified" });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "already_notified", otherOpenClaims: 0 });
     expect(r.sent).toEqual([]);
     expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
   });
 
   it("a failed send releases its own claim — matched by value — and records no notification", async () => {
     const r = await post({ method: "classroom" }, { sendFails: true });
-    expect(r.json).toEqual({ ok: true, notified: false, reason: "send_failed" });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "send_failed", otherOpenClaims: 0 });
     const release = r.writes.find((w) => w.sql.includes("SET notified_at = NULL"));
     expect(release).toBeDefined();
     expect(release!.sql).toContain("AND notified_at = ?");
@@ -1254,7 +1267,7 @@ describe("POST /lostfound/claims/:id/return", () => {
 
   it("an item already returned (the transition's CAS lost) still notifies, and re-audits nothing", async () => {
     const r = await post({ method: "office" }, { itemChanges: 0 });
-    expect(r.json).toEqual({ ok: true, notified: true });
+    expect(r.json).toEqual({ ok: true, notified: true, otherOpenClaims: 0 });
     expect(r.sent).toHaveLength(1);
     // No second lostfound.item.returned, and the claim-settling batch never ran.
     expect(r.audit.map((d) => d.action)).toEqual(["lostfound.claim.return_notified"]);
@@ -1265,6 +1278,29 @@ describe("POST /lostfound/claims/:id/return", () => {
     expect((await post({ method: "donate" })).status).toBe(400);
     expect((await post({})).status).toBe(400);
     expect((await post({ method: "classroom" }, { claim: null })).status).toBe(404);
+  });
+
+  it("refuses a DISMISSED claim — staff judged that person not the owner, and a stale tab must not mail them 'good news'", async () => {
+    const r = await post(
+      { method: "classroom" },
+      { claim: { resolved_at: "2026-11-02T10:00:00.000Z", resolution: "dismissed" } },
+    );
+    expect(r.status).toBe(409);
+    expect(r.sent).toEqual([]);
+    expect(r.writes).toEqual([]);
+    expect(r.audit).toEqual([]);
+  });
+
+  it("reports how many OTHER open claims the return settled with no message of their own", async () => {
+    const r = await post({ method: "classroom" }, { others: 2 });
+    expect(r.json).toEqual({ ok: true, notified: true, otherOpenClaims: 2 });
+  });
+
+  it("a mail channel that is off answers channel_off — never 'emailed them' about a logged message — and claims no send", async () => {
+    const r = await post({ method: "classroom" }, { channelOff: true });
+    expect(r.json).toEqual({ ok: true, notified: false, reason: "channel_off", otherOpenClaims: 0 });
+    expect(r.writes.some((w) => w.sql.includes("notified_at"))).toBe(false);
+    expect(r.audit.map((d) => d.action)).toEqual(["lostfound.item.returned"]);
   });
 });
 
@@ -1284,6 +1320,12 @@ describe("lostFoundReturnMessage (@sd/shared)", () => {
       expect(m.body).toContain("Blue water bottle");
       expect(m.body).toContain("Eisenhower");
     }
+  });
+
+  it("an untitled item falls back to prose, not the browse grid's progress placeholder", () => {
+    const m = lostFoundReturnMessage("en", "classroom", "  ");
+    expect(m.subject).toContain("the item you claimed");
+    expect(m.body).not.toContain("Being described");
   });
 
   it("each method gets its own sentence", () => {

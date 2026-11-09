@@ -113,6 +113,10 @@ function ReturnFlow({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
+  /** Manual path only: the return is committed and the card is held open so
+   *  staff can text/copy the message before it leaves the queue. Holds the
+   *  outcome line `Done` will hand to `onDone`. */
+  const [manualDone, setManualDone] = useState<string | null>(null);
 
   const isEmail = lfContactIsEmail(claim.contact);
   const phone = lfContactPhone(claim.contact);
@@ -120,24 +124,54 @@ function ReturnFlow({
   // automatic and the manual message can't drift apart.
   const msg = lostFoundReturnMessage(claim.lang, method, claim.itemTitle);
 
-  const run = async (notify: boolean) => {
+  /** The return settles the item's OTHER open claims with no message of their
+   *  own — people who were promised "the office will be in touch". Say so. */
+  const othersNote = (n: number) =>
+    n > 0
+      ? ` ${n} other open claim${n === 1 ? " was" : "s were"} settled with it — contacts are on the item's page.`
+      : "";
+
+  // Email path: one call does both halves, and the outcome line only claims
+  // "emailed" for a send the server confirmed.
+  const runEmail = async (notify: boolean) => {
     setBusy(true);
     setError(null);
     try {
       const r = await api.returnClaim(claim.id, method, notify);
-      if (notify && !r.notified) {
-        await onDone(
-          r.reason === "send_failed"
-            ? `Marked returned, but the email to ${claim.contact} did NOT send — reach them yourself.`
-            : r.reason === "already_notified"
-              ? "Marked returned — they had already been emailed."
-              : `Marked returned. ${claim.contact} isn't an email address — reach them yourself.`,
-        );
+      const extra = othersNote(r.otherOpenClaims);
+      if (!notify) {
+        await onDone(`Marked returned.${extra}`);
+      } else if (r.notified) {
+        await onDone(`Marked returned and emailed ${claim.contact}.${extra}`);
       } else {
-        await onDone(notify ? `Marked returned and emailed ${claim.contact}.` : "Marked returned.");
+        await onDone(
+          (r.reason === "send_failed"
+            ? `Marked returned, but the email to ${claim.contact} did NOT send — reach them yourself.`
+            : r.reason === "channel_off"
+              ? `Marked returned, but email isn't configured — reach ${claim.contact} yourself.`
+              : r.reason === "already_notified"
+                ? "Marked returned — they had already been emailed."
+                : `Marked returned. ${claim.contact} isn't an email address — reach them yourself.`) + extra,
+        );
       }
     } catch (err) {
       setError(errorMessage(err, "That didn't work. Try again."));
+      setBusy(false);
+    }
+  };
+
+  // Manual path: commit the return FIRST, then offer the prefilled message —
+  // texting "it's been sent home" before anything was marked returned would
+  // let the message outrun the item's state.
+  const runManual = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.returnClaim(claim.id, method, false);
+      setManualDone(`Marked returned.${othersNote(r.otherOpenClaims)}`);
+    } catch (err) {
+      setError(errorMessage(err, "That didn't work. Try again."));
+    } finally {
       setBusy(false);
     }
   };
@@ -150,6 +184,40 @@ function ReturnFlow({
       setShowMessage(true);
     }
   };
+
+  if (manualDone) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+        <div role="status">
+          <b>Returned.</b> Now tell {claim.name}:
+        </div>
+        <div className="lf-actions">
+          {phone && (
+            <a
+              className="sd-btn sd-btn-secondary sd-btn-sm"
+              href={`sms:${phone}?&body=${encodeURIComponent(msg.body)}`}
+            >
+              Text them the news
+            </a>
+          )}
+          <Btn sm kind="ghost" onClick={() => void copy()}>
+            {copied ? "Copied ✓" : "Copy the message"}
+          </Btn>
+          <Btn sm onClick={() => void onDone(manualDone)}>
+            Done
+          </Btn>
+        </div>
+        {claim.lang !== "en" && (
+          <div className="sd-meta">The message is written in the language they filled the form in.</div>
+        )}
+        {showMessage && (
+          <div className="sd-card sd-card-pad" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+            {msg.body}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
@@ -169,35 +237,23 @@ function ReturnFlow({
       </div>
       {isEmail ? (
         <div className="lf-actions">
-          <Btn sm disabled={busy} onClick={() => void run(true)}>
+          <Btn sm disabled={busy} onClick={() => void runEmail(true)}>
             Mark returned &amp; email them
           </Btn>
-          <Btn sm kind="ghost" disabled={busy} onClick={() => void run(false)}>
+          <Btn sm kind="ghost" disabled={busy} onClick={() => void runEmail(false)}>
             Mark returned only
           </Btn>
         </div>
       ) : (
         <div className="lf-actions">
-          {phone && (
-            <a className="sd-btn sd-btn-secondary sd-btn-sm" href={`sms:${phone}?&body=${encodeURIComponent(msg.body)}`}>
-              Text them the news
-            </a>
-          )}
-          <Btn sm kind="ghost" disabled={busy} onClick={() => void copy()}>
-            {copied ? "Copied ✓" : "Copy the message"}
-          </Btn>
-          <Btn sm disabled={busy} onClick={() => void run(false)}>
+          <Btn sm disabled={busy} onClick={() => void runManual()}>
             Mark returned
           </Btn>
+          <span className="sd-meta">…then you'll get a prefilled message to send them.</span>
         </div>
       )}
-      {claim.lang !== "en" && (
-        <div className="sd-meta">The message is written in the language they filled the form in.</div>
-      )}
-      {showMessage && (
-        <div className="sd-card sd-card-pad" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-          {msg.body}
-        </div>
+      {isEmail && claim.lang !== "en" && (
+        <div className="sd-meta">The email is written in the language they filled the form in.</div>
       )}
       {error && <div className="lf-notice warn" role="alert">{error}</div>}
       <Btn sm kind="ghost" disabled={busy} onClick={onCancel} style={{ alignSelf: "flex-start" }}>
