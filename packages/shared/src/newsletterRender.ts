@@ -1808,6 +1808,13 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-masthead img{margin:0 auto 14px}
   /* Links keep their href meaning on screen but read as noise in ink. */
   a{color:inherit;text-decoration:none}
+  /* Except an author's own link in the body: underlined on paper, so the
+     reader can see WHICH words the numbered code in the rail resolves.
+     Classless is the selector because it is the same line linkQr draws:
+     author links render bare (renderText), while every generated link in the
+     body carries a class (.nl-event-title-link, .nl-event-volunteer-link,
+     .nl-events-more-link) and stays plain ink. */
+  .nl-body a:not([class]){text-decoration:underline}
   /* Emojis don't survive black-and-white printing — they come out as grey
      smudges or empty boxes — so paper goes without them. The renderer wraps
      each one (hideEmojiOnPaper); on screen the span is inert. */

@@ -263,6 +263,41 @@ describe("the print stylesheet", () => {
     expect(NEWSLETTER_WEB_CSS.slice(0, printAt)).not.toContain(".nl-emoji");
   });
 
+  it("underlines an author's body link on paper, and only on paper", () => {
+    const printAt = NEWSLETTER_WEB_CSS.indexOf("@media print");
+    const printBlock = NEWSLETTER_WEB_CSS.slice(printAt);
+    // The general rule still strips link styling in ink…
+    expect(printBlock).toContain("a{color:inherit;text-decoration:none}");
+    // …and the author's own links get their underline back, so the reader can
+    // see which words the numbered code in the rail resolves.
+    expect(printBlock).toContain(".nl-body a:not([class]){text-decoration:underline}");
+    // Print-only: on screen body links keep the accent colour, no underline.
+    expect(NEWSLETTER_WEB_CSS.slice(0, printAt)).not.toContain(".nl-body a:not([class])");
+
+    // The selector's whole meaning is that author links render CLASSLESS while
+    // every generated link in the body carries a class. If renderText ever adds
+    // a class to the author's anchor, the selector stops matching silently.
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "sign up here",
+              marks: [{ type: "link", attrs: { href: "https://example.com/form" } }],
+            },
+          ],
+        },
+      ],
+    };
+    const html = render({ doc });
+    const anchor = html.match(/<a href="https:\/\/example\.com\/form"[^>]*>/);
+    expect(anchor).not.toBeNull();
+    expect(anchor![0]).not.toContain("class=");
+  });
+
   it("is NEWSLETTER_PRINT_RULES, wrapped — the composer's page estimate measures the same rules", () => {
     // The composer applies these rules on screen in a hidden iframe to estimate
     // printed pages (apps/newsletter/src/lib/printEstimate.ts). The estimate is
