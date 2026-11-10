@@ -7,7 +7,7 @@
 // Claimants' names and contacts appear here and nowhere else. They came from a
 // public form, so they are shown as plain text and links, never as markup.
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { lfContactIsEmail, lfContactPhone, lostFoundReturnMessage } from "@sd/shared";
 import type { LfClaimDTO, LfReturnMethod, LfStaffItemDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
@@ -279,6 +279,15 @@ export function Dashboard() {
   const [returning, setReturning] = useState<string | null>(null);
   const [claimNote, setClaimNote] = useState<string | null>(null);
 
+  /** A claim notification (Slack or email) links here as `/staff?claim=<id>`.
+   *  Once the queue has loaded, scroll that claim into view and ring it. */
+  const [params] = useSearchParams();
+  const linkedClaim = params.get("claim");
+  useEffect(() => {
+    if (!linkedClaim || !claims) return;
+    document.getElementById(`claim-${linkedClaim}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [linkedClaim, claims]);
+
   const loadClaims = () =>
     api
       .claims()
@@ -443,13 +452,22 @@ export function Dashboard() {
         <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <h2 className="sd-h2">Claims</h2>
           {claimNote && <div className="sd-meta" role="status">{claimNote}</div>}
+          {linkedClaim && claims && !claims.some((c) => c.id === linkedClaim) && (
+            <div className="sd-meta" role="status">
+              That claim is no longer open. It has been returned or dismissed.
+            </div>
+          )}
           {claims === null ? (
             <div className="sd-meta">Loading…</div>
           ) : claims.length === 0 ? (
             <div className="sd-meta">No open claims.</div>
           ) : (
             claims.map((c) => (
-              <div key={c.id} className="sd-card sd-card-pad lf-claim">
+              <div
+                key={c.id}
+                id={`claim-${c.id}`}
+                className={`sd-card sd-card-pad lf-claim${c.id === linkedClaim ? " is-linked" : ""}`}
+              >
                 <Link to={`/staff/item/${c.itemId}`}>
                   <img src={c.thumbUrl} alt={c.itemTitle || "Found item"} />
                 </Link>

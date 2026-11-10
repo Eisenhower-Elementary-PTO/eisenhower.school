@@ -353,9 +353,12 @@ export function newSubscriberDigestEmail(env: Env, subs: NewSubscriberSummary[])
  * the staff queue behind a session, not copied into several inboxes that
  * outlive the claim's own retention (claims are swept; email isn't).
  */
-export function lostFoundClaimEmail(env: Env, itemTitle: string): SendArgs {
+export function lostFoundClaimEmail(env: Env, itemTitle: string, claimId?: string): SendArgs {
   const school = env.SCHOOL_NAME;
-  const queue = `${env.LOSTFOUND_URL ?? ""}/staff`;
+  // A deep link: the queue opens on THIS claim (`?claim=` is read by the staff
+  // dashboard). The id is an opaque ULID and the page behind it needs a staff
+  // session, so the link carries nothing the claimant typed.
+  const queue = `${env.LOSTFOUND_URL ?? ""}/staff${claimId ? `?claim=${encodeURIComponent(claimId)}` : ""}`;
   const title = itemTitle.trim() || "an item";
   return {
     to: "",

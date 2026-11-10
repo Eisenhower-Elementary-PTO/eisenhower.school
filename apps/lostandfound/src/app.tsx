@@ -40,10 +40,10 @@ function Loading() {
 function RequireStaff({ children }: { children: React.ReactNode }) {
   const { loading: sessionLoading, me } = useSession();
   const { loading, access } = useAccess();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (sessionLoading || loading) return <Loading />;
   if (!me) {
-    rememberReturnPath(pathname);
+    rememberReturnPath(pathname + search);
     return <Navigate to="/sign-in" replace />;
   }
   if (!access?.canUse) return <NoAccess />;
@@ -54,10 +54,10 @@ function RequireStaff({ children }: { children: React.ReactNode }) {
  *  member-submitted item for staff review, so there is no second gate here. */
 function RequireSignedIn({ children }: { children: React.ReactNode }) {
   const { loading, me } = useSession();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (loading) return <Loading />;
   if (!me) {
-    rememberReturnPath(pathname);
+    rememberReturnPath(pathname + search);
     return <Navigate to="/sign-in" replace />;
   }
   return <>{children}</>;
@@ -65,10 +65,10 @@ function RequireSignedIn({ children }: { children: React.ReactNode }) {
 
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { loading, me } = useSession();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (loading) return <Loading />;
   if (!me) {
-    rememberReturnPath(pathname);
+    rememberReturnPath(pathname + search);
     return <Navigate to="/sign-in" replace />;
   }
   if (!me.user.isSystemAdmin) return <Navigate to="/staff" replace />;
@@ -91,7 +91,7 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 function ReturnToStashedPath() {
   const { loading, me } = useSession();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   useEffect(() => {
     if (loading || !me || pathname !== "/") return;
