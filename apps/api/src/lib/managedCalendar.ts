@@ -466,6 +466,11 @@ export async function deleteManagedCalendar(env: Env, id: string): Promise<Remov
 
   const footprint = await volunteerFootprint(env, CALENDAR_SHEETS, [id]);
   const res = await env.DB.batch([
+    // Album links first: `event_album` references `managed_event` (migration
+    // 0045). Index 0, so the counts below read one position later.
+    env.DB.prepare(
+      "DELETE FROM event_album WHERE managed_event_id IN (SELECT id FROM managed_event WHERE calendar_id = ?)",
+    ).bind(id),
     ...sheetCascade(env, CALENDAR_SHEETS, [id]),
     env.DB.prepare("DELETE FROM calendar_event WHERE managed_calendar_id = ?").bind(id),
     env.DB.prepare("DELETE FROM managed_event WHERE calendar_id = ?").bind(id),
@@ -473,8 +478,8 @@ export async function deleteManagedCalendar(env: Env, id: string): Promise<Remov
   ]);
   return {
     title: cal.name,
-    events: res[4]?.meta.changes ?? 0,
-    occurrences: res[3]?.meta.changes ?? 0,
+    events: res[5]?.meta.changes ?? 0,
+    occurrences: res[4]?.meta.changes ?? 0,
     ...footprint,
   };
 }
@@ -664,6 +669,9 @@ export async function deleteManagedEvent(env: Env, id: string): Promise<Removal 
 
   const footprint = await volunteerFootprint(env, "managed_event_id = ?", [id]);
   const res = await env.DB.batch([
+    // Album links first (FK to `managed_event`, migration 0045) — index 0, so
+    // the counts below read one position later.
+    env.DB.prepare("DELETE FROM event_album WHERE managed_event_id = ?").bind(id),
     ...sheetCascade(env, "managed_event_id = ?", [id]),
     env.DB.prepare("DELETE FROM calendar_event WHERE managed_event_id = ?").bind(id),
     env.DB.prepare("DELETE FROM managed_event WHERE id = ?").bind(id),
@@ -671,8 +679,8 @@ export async function deleteManagedEvent(env: Env, id: string): Promise<Removal 
   return {
     title: row.title,
     calendarId: row.calendar_id,
-    events: res[4]?.meta.changes ?? 0,
-    occurrences: res[3]?.meta.changes ?? 0,
+    events: res[5]?.meta.changes ?? 0,
+    occurrences: res[4]?.meta.changes ?? 0,
     ...footprint,
   };
 }

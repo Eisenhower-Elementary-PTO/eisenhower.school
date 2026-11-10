@@ -69,17 +69,19 @@ export function AppShell({
   );
 }
 
-export type NavKey = "calendar" | "admin";
+export type NavKey = "calendar" | "albums" | "admin";
 
 /** This app's OWN screens. The directory and the newsletter used to be here as
  *  absolute URLs; they are now in the platform switcher (AppSwitcher.tsx). One
  *  list, read by both the bottom bar and the desktop sidebar. (The /volunteers
  *  index briefly lived here too; it moved to the PTO site's landing page,
  *  which renders the same anonymous reads server-side.) */
-export function navItems(t: ReturnType<typeof useI18n>["t"], isSystemAdmin: boolean) {
+export function navItems(t: ReturnType<typeof useI18n>["t"], isSystemAdmin: boolean, signedIn = false) {
   const items: [IconName, NavKey, string, string][] = [
     ["calendar", "calendar", t("navCalendar"), "/"],
   ];
+  // Event photo albums: links are capabilities, so the tab is for members only.
+  if (signedIn) items.push(["photo", "albums", t("navAlbums"), "/albums"]);
   if (isSystemAdmin) items.push(["shield", "admin", t("navAdmin"), "/admin"]);
   return items;
 }
@@ -96,7 +98,7 @@ export function BottomNav({ active }: { active: NavKey }) {
   const navigate = useNavigate();
   const chrome = useChrome();
   const { me } = useSession();
-  const items = navItems(t, !!me?.user.isSystemAdmin);
+  const items = navItems(t, !!me?.user.isSystemAdmin, !!me);
 
   return (
     <nav className="sd-bottomnav">

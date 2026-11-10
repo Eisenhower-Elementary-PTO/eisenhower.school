@@ -16,7 +16,7 @@ function Sidebar({ active }: { active: NavKey }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { me } = useSession();
-  const items = navItems(t, !!me?.user.isSystemAdmin);
+  const items = navItems(t, !!me?.user.isSystemAdmin, !!me);
 
   return (
     <aside className="sd-desknav">

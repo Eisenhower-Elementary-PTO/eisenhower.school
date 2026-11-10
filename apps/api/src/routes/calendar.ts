@@ -13,6 +13,7 @@ import type { Context } from "hono";
 import type { HonoEnv } from "../env.js";
 import { requireAuth } from "../middleware/session.js";
 import { requireApproved } from "../lib/directoryAccess.js";
+import { albumFor, listAlbums } from "../lib/eventAlbums.js";
 import { findEventByPath, listCalendarFeeds, queryUpcomingEvents, type UpcomingEventsQuery } from "../lib/calendar.js";
 
 export const calendar = new Hono<HonoEnv>();
@@ -79,4 +80,27 @@ calendar.get("/events/:date/:slug", async (c) => {
   const event = await findEventByPath(c.env, c.req.param("date"), c.req.param("slug"));
   if (!event) return c.json({ error: "not_found" }, 404);
   return c.json({ event });
+});
+
+/** GET /calendar/events/:date/:slug/album — the photo album on this event's
+ *  occurrence, `{ albumUrl: string | null }`. Signed-in members only: the link is
+ *  a capability, so it is a route of its own rather than a field on the event —
+ *  `CalendarEventDTO` also feeds the agenda and the newsletter's frozen
+ *  snapshots, and anything added there travels with them. An imported event has
+ *  no durable handle (invariant 8) and so no album. */
+calendar.get("/events/:date/:slug/album", async (c) => {
+  requireAuth(c);
+  const event = await findEventByPath(c.env, c.req.param("date"), c.req.param("slug"));
+  if (!event) return c.json({ error: "not_found" }, 404);
+  const albumUrl =
+    event.seriesId && event.recurrenceId ? await albumFor(c.env, event.seriesId, event.recurrenceId) : null;
+  return c.json({ albumUrl });
+});
+
+/** GET /calendar/albums — every event photo album, newest first. The page that
+ *  outlives the event page (the agenda forgets an occurrence ~2 days after it
+ *  ends). Signed-in members only. */
+calendar.get("/albums", async (c) => {
+  requireAuth(c);
+  return c.json({ albums: await listAlbums(c.env) });
 });

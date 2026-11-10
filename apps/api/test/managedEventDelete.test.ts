@@ -96,6 +96,15 @@ describe("deleteManagedEvent", () => {
     expect(sheet).toBeLessThan(event);
   });
 
+  it("removes the album links before the event their foreign key names", async () => {
+    // event_album references managed_event (migration 0045); D1 enforces it.
+    const { env, batched } = captureEnv();
+    await deleteManagedEvent(env, "01EVENT");
+    const album = at(batched, "event_album");
+    expect(album).toBeGreaterThanOrEqual(0);
+    expect(album).toBeLessThan(at(batched, "managed_event"));
+  });
+
   it("finds those sheets through managed_event, never through calendar_event", async () => {
     // A sheet does not reference the derived cache at all, and reaching for it
     // here would silently miss every sheet whose occurrence had been edited away

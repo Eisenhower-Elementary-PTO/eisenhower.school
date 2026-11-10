@@ -142,6 +142,12 @@ export interface Strings {
   /** Link text for a sheet's runbook — the organizers' document on how the
    *  event is run. Members-only; the public sheet never carries the URL. */
   volunteerRunbook: string;
+  /** Label on an event's photo-album link (members only). */
+  eventAlbum: string;
+  /** Calendar nav tab + albums screen title. */
+  navAlbums: string;
+  albumsTitle: string;
+  albumsEmpty: string;
   volunteerNamesMembersOnly: string;
   volunteerAlready: string;
   volunteerTookLastSpot: string;
@@ -1128,6 +1134,10 @@ const en: Strings = {
   volunteerSignupsClosed: "Signups are closed.",
   volunteerNoPositions: "No positions have been posted yet.",
   volunteerRunbook: "How this event is run",
+  eventAlbum: "Photo album",
+  navAlbums: "Photos",
+  albumsTitle: "Event photo albums",
+  albumsEmpty: "No albums yet. When the PTO shares one for an event, it will appear here.",
   volunteerNamesMembersOnly: "Sign in to see who has signed up.",
   volunteerAlready: "Already signed up for this.",
   volunteerTookLastSpot: "Someone just took the last spot.",
@@ -2051,6 +2061,10 @@ const es: Strings = {
   volunteerSignupsClosed: "Las inscripciones están cerradas.",
   volunteerNoPositions: "Todavía no se han publicado puestos.",
   volunteerRunbook: "Cómo se organiza este evento",
+  eventAlbum: "Álbum de fotos",
+  navAlbums: "Fotos",
+  albumsTitle: "Álbumes de fotos de eventos",
+  albumsEmpty: "Aún no hay álbumes. Cuando la PTO comparta uno para un evento, aparecerá aquí.",
   volunteerNamesMembersOnly: "Inicia sesión para ver quién se ha apuntado.",
   volunteerAlready: "Ya está apuntado en este puesto.",
   volunteerTookLastSpot: "Alguien acaba de tomar el último lugar.",
@@ -2900,6 +2914,10 @@ const zh: Strings = {
   volunteerSignupsClosed: "报名已截止。",
   volunteerNoPositions: "尚未发布任何岗位。",
   volunteerRunbook: "活动组织指南",
+  eventAlbum: "相册",
+  navAlbums: "照片",
+  albumsTitle: "活动相册",
+  albumsEmpty: "暂无相册。家长会为活动分享相册后，会显示在这里。",
   volunteerNamesMembersOnly: "登录后可查看报名名单。",
   volunteerAlready: "该岗位已报名。",
   volunteerTookLastSpot: "最后一个名额刚被别人报走了。",
@@ -3720,6 +3738,10 @@ const so: Strings = {
   volunteerSignupsClosed: "Is-diiwaangelintu waa xiran tahay.",
   volunteerNoPositions: "Weli ma jiraan boosas la soo bandhigay.",
   volunteerRunbook: "Sida munaasabaddan loo maamulo",
+  eventAlbum: "Albamka sawirada",
+  navAlbums: "Sawirada",
+  albumsTitle: "Albamada sawirada munaasabadaha",
+  albumsEmpty: "Weli albam ma jiro. Marka PTO-gu albam u wadaagto munaasabad, halkan ayuu ka muuqan doonaa.",
   volunteerNamesMembersOnly: "Gal si aad u aragto cidda is-diiwaangelisay.",
   volunteerAlready: "Horey ayaad tan isugu diiwaangelisay.",
   volunteerTookLastSpot: "Qof ayaa hadda qaatay booskii ugu dambeeyay.",

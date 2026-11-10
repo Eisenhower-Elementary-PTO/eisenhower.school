@@ -720,6 +720,18 @@ export interface ManagedOccurrenceDTO {
   sheet: { id: string; slug: string; published: boolean; positionCount: number } | null;
 }
 
+/** One album in the members-only albums list (GET /calendar/albums). Hand-built
+ *  from `event_album` + `managed_event`; there is no public twin — an album link
+ *  is a capability, so none of this reaches `publicEventOf` (migration 0045). */
+export interface EventAlbumDTO {
+  title: string;
+  /** ISO-8601 UTC start of the occurrence the album belongs to. */
+  start: string;
+  allDay: boolean;
+  /** https link to the album. */
+  url: string;
+}
+
 /** A current grantee of a share, for the visibility sheet's "Shared with" list. */
 export interface ShareGranteeDTO {
   id: string; // share row id
@@ -2339,6 +2351,11 @@ export type AuditAction =
   | "calendar.event.created"
   | "calendar.event.updated"
   | "calendar.event.deleted"
+  /** An occurrence's photo-album link was set or changed / cleared. `detail`
+   *  carries the occurrence date only — the URL is a capability (migration 0045)
+   *  and an audit row is forever. Slack-silent by default. */
+  | "calendar.album.set"
+  | "calendar.album.cleared"
   | "newsletter.issue.created"
   | "newsletter.issue.updated"
   | "newsletter.issue.deleted"

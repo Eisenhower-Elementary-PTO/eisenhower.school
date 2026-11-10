@@ -12,6 +12,7 @@ import type {
   VolunteerSheetInput,
 } from "@sd/shared";
 import { normalizeEmail } from "../lib/db.js";
+import { EventAlbumError, setAlbum } from "../lib/eventAlbums.js";
 import { isEmail } from "../lib/newsletter.js";
 import { sendEmailResult } from "../lib/email.js";
 import { buildTestReminder } from "../lib/volunteerReminders.js";
@@ -508,6 +509,38 @@ managedCalendar.post("/volunteer-sheets/:id/occurrence", async (c) => {
   } catch (err) {
     const bad = invalid(err);
     if (bad) return c.json(bad, 400);
+    throw err;
+  }
+});
+
+/** PUT /admin/managed-events/:id/album { occurrenceStart, url } — set the photo
+ *  album link on ONE occurrence; an empty/null `url` clears it. System admin
+ *  only. A repeat of the stored value writes nothing and audits nothing. The URL
+ *  never goes in `detail` or `notify`: it is a capability and an audit row is
+ *  forever (migration 0045). */
+managedCalendar.put("/managed-events/:id/album", async (c) => {
+  const auth = requireAuth(c);
+  if (!auth.isSystemAdmin) return c.json({ error: "forbidden" }, 403);
+  const body = await c.req.json<{ occurrenceStart?: string; url?: string | null }>().catch(() => null);
+  if (!body?.occurrenceStart) return c.json({ error: "invalid_body" }, 400);
+  const id = c.req.param("id");
+
+  try {
+    const result = await setAlbum(c.env, id, body.occurrenceStart, body.url);
+    if (!result) return c.json({ error: "not_found" }, 404);
+    if (result.changed) {
+      c.var.audit.push({
+        action: body.url?.trim() ? "calendar.album.set" : "calendar.album.cleared",
+        entityKind: "managed_event",
+        entityId: id,
+        detail: { occurrenceStart: body.occurrenceStart, replaced: result.previous !== null },
+      });
+    }
+    return c.json({ ok: true, changed: result.changed });
+  } catch (err) {
+    if (err instanceof EventAlbumError) {
+      return c.json({ error: "invalid", message: err.message }, 400);
+    }
     throw err;
   }
 });

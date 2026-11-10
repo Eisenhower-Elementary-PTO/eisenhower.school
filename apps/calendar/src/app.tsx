@@ -5,6 +5,7 @@ import { takeReturnPath } from "./lib/returnPath.js";
 import { SignIn, CheckEmail } from "./screens/Onboarding.js";
 import { Calendar } from "./screens/Calendar.js";
 import { Event } from "./screens/Event.js";
+import { Albums } from "./screens/Albums.js";
 import { Admin } from "./screens/Admin.js";
 import { CalendarEvents } from "./screens/CalendarEvents.js";
 import { EventVolunteers } from "./screens/EventVolunteers.js";
@@ -96,6 +97,9 @@ export function App() {
             eventPath.ts. That is also why it works for an event imported from
             someone else's ICS feed, which has no durable id at all. */}
         <Route path="/e/:date/:slug" element={<Event />} />
+
+        {/* Members only: the links are capabilities (migration 0045). */}
+        <Route path="/albums" element={<RequireAuth><Albums /></RequireAuth>} />
 
         <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
         <Route path="/admin/calendars/:id" element={<RequireAuth><CalendarEvents /></RequireAuth>} />

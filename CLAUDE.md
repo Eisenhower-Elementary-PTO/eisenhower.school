@@ -1229,6 +1229,25 @@ Worker, sharing one session:
    so. `test/newsletterMetrics.test.ts` pins the oracle posture, the
    bucketing, the school-local day and the delete cleanup.
 
+35. **An event photo-album link is a capability, so it lives in its own table
+   and is read by members only.** `event_album` (migration 0045) is keyed on the
+   durable `(managed_event_id, occurrence_start)` pair (invariant 8), one album
+   per OCCURRENCE. It is deliberately NOT a field on `CalendarEventDTO` (that
+   type also feeds the agenda and the newsletter's frozen snapshots) and never
+   reaches `publicEventOf`; the only readers are `GET /calendar/events/:date/:slug/album`
+   and `GET /calendar/albums`, both `requireAuth`. Nothing talks to Google: the
+   Photos Library API stopped sharing app-created albums (403, 2025-03-31), so a
+   PTO admin makes the collaborative album by hand and pastes the share link
+   (`PUT /admin/managed-events/:id/album`, held to https on `ALBUM_HOSTS` by
+   `normalizeAlbumUrl`). The URL never goes in an audit `detail` or Slack
+   `notify` (`calendar.album.set`/`.cleared` carry the date only). The list
+   screen exists because `calendar_event` forgets an occurrence ~2 days after it
+   ends — the page that holds the link would otherwise vanish when the photos
+   exist — and for the same reason a NEW album can be added only while its date
+   is still on the agenda (replace/clear always work). The two delete cascades
+   remove `event_album` FIRST (FK to `managed_event`; their `res[]` indices
+   shifted by one). `test/eventAlbums.test.ts`.
+
 ## Conventions
 
 - TypeScript strict everywhere. `verbatimModuleSyntax` — `import type` for

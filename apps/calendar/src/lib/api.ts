@@ -4,6 +4,7 @@
 // cross-domain cookie tricks. The API must list this origin in ALLOWED_ORIGINS.
 import type {
   CalendarEventDTO,
+  EventAlbumDTO,
   PublicCalendarEventDTO,
   PublicCalendarFeedDTO,
   CalendarSourceDTO,
@@ -166,6 +167,20 @@ export const api = {
     request<{ event: CalendarEventDTO }>(
       `/calendar/events/${encodeURIComponent(date)}/${encodeURIComponent(slug)}`,
     ),
+
+  /** The event's photo album, members only (the link is a capability — it is a
+   *  route of its own so it can't ride an agenda/newsletter DTO). */
+  eventAlbum: (date: string, slug: string) =>
+    request<{ albumUrl: string | null }>(
+      `/calendar/events/${encodeURIComponent(date)}/${encodeURIComponent(slug)}/album`,
+    ),
+  eventAlbums: () => request<{ albums: EventAlbumDTO[] }>("/calendar/albums"),
+  /** Admin: set (or, with an empty url, clear) one occurrence's album link. */
+  setEventAlbum: (seriesId: string, occurrenceStart: string, url: string) =>
+    request<{ ok: true; changed: boolean }>(`/admin/managed-events/${seriesId}/album`, {
+      method: "PUT",
+      body: JSON.stringify({ occurrenceStart, url }),
+    }),
 
   // Imported ICS sources (admin).
   calendarSources: () => request<{ sources: CalendarSourceDTO[] }>("/admin/calendar-sources"),

@@ -40,7 +40,7 @@ import { LinkifiedText } from "../components/LinkifiedText.js";
 import { VolunteerPositions, runbookOf, type AnySheet } from "../components/VolunteerPositions.js";
 import { useI18n } from "../i18n/index.js";
 import { useIsDesktop } from "../lib/useIsDesktop.js";
-import { api } from "../lib/api.js";
+import { api, errorMessage } from "../lib/api.js";
 import { useSession } from "../lib/session.js";
 import { SCHOOL_TIME_ZONE } from "../lib/timezone.js";
 import { rememberReturnPath } from "../lib/returnPath.js";
@@ -53,7 +53,7 @@ const DAY_LABEL: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", 
 /** What this page renders. The public shape plus, for a system admin only,
  *  `seriesId` from the members-only re-read — exactly the widening the agenda
  *  allows itself, and no more. See api.memberCalendarEvent. */
-type PageEvent = PublicCalendarEventDTO & Partial<Pick<CalendarEventDTO, "seriesId">>;
+type PageEvent = PublicCalendarEventDTO & Partial<Pick<CalendarEventDTO, "seriesId" | "recurrenceId">>;
 
 function googleMapsUrl(q: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
@@ -115,6 +115,10 @@ export function Event() {
   const [settledFor, setSettledFor] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  // The photo album link, members only. `undefined` = not asked / not signed in.
+  const [albumUrl, setAlbumUrl] = useState<string | null | undefined>(undefined);
+  const [albumDraft, setAlbumDraft] = useState<string | null>(null); // non-null = editor open
+  const [albumError, setAlbumError] = useState<string | null>(null);
 
   const isAdmin = !!me?.user.isSystemAdmin;
 
@@ -133,6 +137,36 @@ export function Event() {
   useEffect(() => {
     void loadEvent();
   }, [loadEvent]);
+
+  // The album link is a capability, so it comes from a members-only route of its
+  // own (never the public event read) and only once a session has resolved. An
+  // imported event has none; the route answers null and nothing renders.
+  useEffect(() => {
+    if (sessionLoading || !me) {
+      setAlbumUrl(undefined);
+      return;
+    }
+    let live = true;
+    api
+      .eventAlbum(date, slug)
+      .then((r) => live && setAlbumUrl(r.albumUrl))
+      .catch(() => live && setAlbumUrl(null));
+    return () => {
+      live = false;
+    };
+  }, [date, slug, me, sessionLoading]);
+
+  const saveAlbum = async () => {
+    if (!event?.seriesId || !event.recurrenceId || albumDraft === null) return;
+    setAlbumError(null);
+    try {
+      await api.setEventAlbum(event.seriesId, event.recurrenceId, albumDraft);
+      setAlbumUrl(albumDraft.trim() || null);
+      setAlbumDraft(null);
+    } catch (err) {
+      setAlbumError(errorMessage(err, "Could not save the album link."));
+    }
+  };
 
   // The signup sheet, once the event says there is one. Two endpoints, picked by
   // whether there's a session — counts for everyone, names for members. The
@@ -361,6 +395,46 @@ export function Event() {
           </div>
         )}
       </div>
+
+      {/* Photo album: members only (the link is a capability — migration 0045).
+          Admin editing is English, like the rest of the operator tooling. */}
+      {(albumUrl || (isAdmin && event.seriesId)) && (
+        <div className="sd-card sd-card-pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {albumUrl && (
+            <div className="sd-row" style={{ gap: 9 }}>
+              <Icon name="photo" size={17} style={{ color: "var(--ink-3)", flex: "0 0 auto" }} />
+              <a href={albumUrl} target="_blank" rel="noopener noreferrer" className="sd-link" style={{ fontSize: 14, fontWeight: 600 }}>
+                {t("eventAlbum")}
+              </a>
+            </div>
+          )}
+          {isAdmin && event.seriesId && event.recurrenceId && albumDraft === null && (
+            <Btn kind="secondary" icon="pencil" onClick={() => { setAlbumError(null); setAlbumDraft(albumUrl ?? ""); }}>
+              {albumUrl ? "Change album link" : "Add photo album link"}
+            </Btn>
+          )}
+          {albumDraft !== null && (
+            <>
+              <input
+                className="sd-input"
+                value={albumDraft}
+                onChange={(e) => setAlbumDraft(e.target.value)}
+                placeholder="https://photos.app.goo.gl/…"
+                inputMode="url"
+                autoFocus
+              />
+              <div className="sd-meta">
+                Paste the share link of a collaborative Google Photos album for THIS date. Leave empty and save to remove it.
+              </div>
+              {albumError && <div className="sd-meta" style={{ color: "var(--red, #b3261e)" }}>{albumError}</div>}
+              <div className="sd-row" style={{ gap: 8 }}>
+                <Btn kind="primary" onClick={() => void saveAlbum()}>Save</Btn>
+                <Btn kind="secondary" onClick={() => setAlbumDraft(null)}>Cancel</Btn>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {/* No per-event download here. Taking a COPY of one occurrence is the
