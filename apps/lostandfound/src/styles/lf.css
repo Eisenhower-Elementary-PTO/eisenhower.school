@@ -95,6 +95,7 @@
 .lf-tray-pending { display: flex; align-items: center; justify-content: center; }
 
 .lf-claim { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; }
+.lf-claim.is-linked { outline: 2px solid var(--blue-700); outline-offset: 2px; }
 .lf-claim img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--bg-2); }
 
 .lf-actions { display: flex; flex-wrap: wrap; gap: 8px; }

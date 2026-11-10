@@ -126,6 +126,7 @@ function testEnv(webhook?: string): Env {
     ALLOWED_ORIGINS: "https://directory.eisenhower.school",
     CALENDAR_URL: "https://calendar.eisenhower.school",
     NEWSLETTER_URL: "https://newsletter.eisenhower.school",
+    LOSTFOUND_URL: "https://lostandfound.eisenhower.school",
     SLACK_WEBHOOK_URL: webhook,
   } as unknown as Env;
 }
@@ -687,6 +688,22 @@ describe("someone new", () => {
       { action: "admin.action", entityId: "01U", notify: { op: "user.create", email: "a@b.edu", emailSent: false } },
     ]);
     expect(quiet).toContain("no invitation sent");
+  });
+});
+
+describe("lost & found", () => {
+  it("links a claim to its own spot in the staff queue and names nobody", async () => {
+    const [line] = await lines([
+      {
+        action: "lostfound.claim.created",
+        entityKind: "lf_claim",
+        entityId: "01CLAIM",
+        detail: { itemId: "01ITEM" },
+        notify: {},
+      },
+    ]);
+    expect(line).toContain("<https://lostandfound.eisenhower.school/staff?claim=01CLAIM|Open claim>");
+    expect(line).not.toContain("01ITEM");
   });
 });
 

@@ -84,11 +84,11 @@ export function parseClaimNotifyEmails(value: string | null): string[] {
  *  Never throws, and sends nothing when no address is configured. The message
  *  carries the item's title and the queue link, never the claimant
  *  (lostFoundClaimEmail's comment). */
-export async function notifyLostFoundClaim(env: Env, itemTitle: string): Promise<void> {
+export async function notifyLostFoundClaim(env: Env, itemTitle: string, claimId?: string): Promise<void> {
   try {
     const recipients = parseClaimNotifyEmails(await getSetting(env, LOSTFOUND_CLAIM_NOTIFY_SETTING));
     if (recipients.length === 0) return;
-    const msg = lostFoundClaimEmail(env, itemTitle);
+    const msg = lostFoundClaimEmail(env, itemTitle, claimId);
     for (const to of recipients) {
       try {
         await sendEmail(env, { ...msg, to });

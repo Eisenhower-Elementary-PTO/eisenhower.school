@@ -602,7 +602,16 @@ const FORMATTERS = {
    *  the only one that needs a person. It names no claimant and no item text —
    *  the route hands this formatter an empty `notify`, and the item's own words
    *  may include a child's name (invariant 33). */
-  "lostfound.claim.created": () => `:raising_hand: Someone said "that's mine" on a lost & found item — one to look at.`,
+  "lostfound.claim.created": ({ env, entityId }) => {
+    // A deep link to this claim in the staff queue (the dashboard reads
+    // `?claim=`). The claim id is an opaque ULID; the page needs a staff
+    // session, so the channel learns nothing about the claimant.
+    const open =
+      env.LOSTFOUND_URL && entityId
+        ? ` ${link(`${env.LOSTFOUND_URL}/staff?claim=${encodeURIComponent(entityId)}`, "Open claim")}`
+        : "";
+    return `:raising_hand: Someone said "that's mine" on a lost & found item — one to look at.${open}`;
+  },
 } satisfies Partial<Record<AuditAction, SlackFormatter>>;
 
 // ── Shared lookups ──────────────────────────────────────────────────────────

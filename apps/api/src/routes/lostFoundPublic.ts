@@ -146,7 +146,7 @@ lostFoundPublic.post("/items/:id/claims", async (c) => {
     // Mail the configured addresses — only for a STORED claim (suppressed and
     // capped ones return above, so the caps bound the email exactly as they
     // bound the rows). The item's title, never the claimant (lib/email.ts).
-    c.executionCtx.waitUntil(notifyLostFoundClaim(c.env, item.title));
+    c.executionCtx.waitUntil(notifyLostFoundClaim(c.env, item.title, id));
   } catch (err) {
     // Same neutral answer on failure — a 500 would say something success doesn't.
     console.error(`[lostfound] claim failed: ${String(err).slice(0, 200)}`);

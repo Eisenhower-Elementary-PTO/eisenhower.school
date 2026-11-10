@@ -733,7 +733,7 @@ describe("POST /lostfound-public/items/:id/claims", () => {
     expect(r.sent.map((m) => m.to)).toEqual(["office@school.example", "pto@x.org"]);
     for (const m of r.sent) {
       expect(m.subject).toContain("Blue water bottle");
-      expect(m.text).toContain("https://lostandfound.eisenhower.school/staff");
+      expect(m.text).toContain("https://lostandfound.eisenhower.school/staff?claim=");
       // The claimant's name, contact, child, teacher and message stay behind
       // the session.
       expect(`${m.subject} ${m.text} ${m.html}`).not.toMatch(/Pat|example\.com|Milo|Shrestha|Dent/);
