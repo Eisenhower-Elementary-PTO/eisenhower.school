@@ -1156,6 +1156,15 @@ Worker, sharing one session:
    no canvas; a wrong guess turns a good photo sideways); staff apply with one
    tap and the browser re-encodes under a FRESH R2 key (both media routes
    cache for an hour — overwriting a key keeps serving the old orientation).
+   **The model also suggests a square CROP** (`crop_x/y/w/h`, migration 0046),
+   display-only: the photo is never cut, the grid tile (`CropImage`) just looks
+   at that rectangle. Stored as fractions of the image, square in PIXELS
+   (`cleanCrop` turns the model's centre+size into it, reading the JPEG header
+   for dimensions), so a client needs no aspect ratio. It is geometry, so it is
+   in `publicItemOf` on purpose. Rotating a photo turns the rectangle with it
+   (`PUT …/photo?turn=`, `turnCrop`); a replacement with no `turn` clears it.
+   `POST/DELETE /lostfound/items/:id/crop` are the edit page's "crop with AI"
+   and "clear crop".
    **Photos also arrive by EMAIL**: Email Routing hands
    `found@sitemail.eisenhower.school` to the Worker's `email` handler
    (`src/email.ts` → `lib/lostFoundEmail.ts`). The ENVELOPE sender must be an
