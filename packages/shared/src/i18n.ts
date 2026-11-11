@@ -890,6 +890,10 @@ export interface Strings {
   lfFactWhere: string;
   lfFactFound: string;
   lfAutoDescribed: string;
+  lfZoomIn: string;
+  lfZoomOut: string;
+  lfZoomReset: string;
+  lfZoomHint: string;
   lfPendingNote: string;
   lfClaimTitle: string;
   lfClaimLead: string;
@@ -1833,6 +1837,10 @@ const en: Strings = {
   lfFactWhere: "Where it was found",
   lfFactFound: "Found on",
   lfAutoDescribed: "Described automatically from the photo.",
+  lfZoomIn: "Zoom in",
+  lfZoomOut: "Zoom out",
+  lfZoomReset: "Reset",
+  lfZoomHint: "Pinch or double-tap the photo to zoom, then drag to look around.",
   lfPendingNote: "We're still writing a description for this item.",
   lfClaimTitle: "Is this yours?",
   lfClaimLead: "Tell the office and they'll set it aside for you.",
@@ -2695,6 +2703,10 @@ const es: Strings = {
   lfFactWhere: "Dónde se encontró",
   lfFactFound: "Fecha",
   lfAutoDescribed: "Descripción generada automáticamente a partir de la foto (en inglés).",
+  lfZoomIn: "Acercar",
+  lfZoomOut: "Alejar",
+  lfZoomReset: "Restablecer",
+  lfZoomHint: "Pellizca o toca dos veces la foto para acercar, y arrastra para mirar alrededor.",
   lfPendingNote: "Todavía estamos escribiendo la descripción de este objeto.",
   lfClaimTitle: "¿Es tuyo?",
   lfClaimLead: "Avísale a la oficina y te lo guardarán.",
@@ -3519,6 +3531,10 @@ const zh: Strings = {
   lfFactWhere: "捡到地点",
   lfFactFound: "捡到日期",
   lfAutoDescribed: "描述由系统根据照片自动生成（英文）。",
+  lfZoomIn: "放大",
+  lfZoomOut: "缩小",
+  lfZoomReset: "重置",
+  lfZoomHint: "双指捏合或双击照片可放大，然后拖动查看细节。",
   lfPendingNote: "我们还在为这件物品撰写描述。",
   lfClaimTitle: "这是你的吗？",
   lfClaimLead: "告诉学校办公室，他们会为你留着。",
@@ -4439,6 +4455,10 @@ const so: Strings = {
   lfFactWhere: "Halka laga helay",
   lfFactFound: "Taariikhda la helay",
   lfAutoDescribed: "Sharaxaadda si toos ah ayaa looga sameeyay sawirka (Ingiriisi).",
+  lfZoomIn: "Weyneey",
+  lfZoomOut: "Yaree",
+  lfZoomReset: "Dib u celi",
+  lfZoomHint: "Sawirka ku taabo laba jeer ama farahaaga isku soo dhaaf si aad u weyneyso, kadibna jiid si aad u eegto.",
   lfPendingNote: "Weli waxaan qoraynaa sharaxaadda alaabtan.",
   lfClaimTitle: "Ma adigaa leh?",
   lfClaimLead: "U sheeg xafiiska, waana kuu kaydin doonaan.",

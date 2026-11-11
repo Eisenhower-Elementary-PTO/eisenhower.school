@@ -54,6 +54,23 @@
   width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--r-card);
   background: var(--bg-2); display: block;
 }
+.lf-zoom-frame {
+  overflow: hidden; border-radius: var(--r-card); background: var(--bg-2);
+  touch-action: pan-y; cursor: zoom-in; user-select: none; -webkit-user-select: none;
+}
+.lf-zoom-frame.is-zoomed { touch-action: none; cursor: grab; }
+.lf-zoom-frame:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.lf-zoom-img {
+  width: 100%; max-height: 70vh; object-fit: contain; display: block;
+  transform-origin: center; will-change: transform; -webkit-user-drag: none;
+}
+.lf-zoom-tools { display: flex; gap: 8px; margin-top: 8px; }
+.lf-zoom-btn {
+  min-width: 40px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--paper); color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.lf-zoom-btn:disabled { opacity: 0.45; cursor: default; }
+.lf-zoom-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .lf-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14.5px; }
 .lf-facts dt { color: var(--ink-3); }
 .lf-facts dd { margin: 0; }

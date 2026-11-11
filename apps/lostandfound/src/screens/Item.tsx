@@ -14,6 +14,7 @@ import { Link, useParams } from "react-router-dom";
 import type { LfPublicItemDTO } from "@sd/shared";
 import { Screen } from "../components/Screen.js";
 import { Swatch } from "../components/items.js";
+import { ZoomImage } from "../components/ZoomImage.js";
 import { Btn } from "../components/atoms.js";
 import { useI18n } from "../i18n/index.js";
 import { useAccess } from "../lib/access.js";
@@ -68,7 +69,7 @@ export function Item() {
 
         {state === "ready" && item && (
           <div className="lf-detail">
-            <img className="lf-photo" src={item.photoUrl} alt={title} />
+            <ZoomImage src={item.photoUrl} alt={title} />
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <h1 className="sd-h1">{title}</h1>
               {item.pending ? (
