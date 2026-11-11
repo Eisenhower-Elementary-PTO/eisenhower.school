@@ -7,6 +7,7 @@ import {
   formatClock,
   isoToZonedDate,
   resolveTimeZone,
+  type LfCrop,
   type LfRotation,
   type Locale,
   type Strings,
@@ -220,20 +221,48 @@ export function turnWord(turn: Turn): string {
   return turn === "half" ? "upside down" : "sideways";
 }
 
+/** "sideways", "upside down", "loose" (the item is small in the frame), or
+ *  both, for the prompt that offers the fix. Null when there is nothing to fix. */
+export function photoFixWords(turn: Turn | null, crop: LfCrop | null): string | null {
+  const parts = [turn ? turnWord(turn) : null, crop ? "has room to crop" : null].filter(Boolean);
+  return parts.length ? parts.join(" and ") : null;
+}
+
 /** A photo this app already made (EXIF-free, upright as far as anyone knew),
- *  turned a quarter and re-encoded as a full-size photo and a thumbnail. Used
- *  when the phone's own orientation was wrong — a photo taken flat on a table
- *  has no "up" for the phone to record. Plain decode on purpose: the input
- *  carries no tag, so there is nothing for the browser to apply. */
-export async function rotatePhoto(source: Blob, turn: Turn): Promise<{ photo: Blob; thumb: Blob }> {
-  const bitmap = await createImageBitmap(source);
+ *  cropped and/or turned a quarter, then re-encoded as a full-size photo and a
+ *  thumbnail. Used when the phone's own orientation was wrong (a photo taken
+ *  flat on a table has no "up" for the phone to record) or the item is small
+ *  in the frame. The crop box is in the photo AS GIVEN, so the crop comes
+ *  FIRST and the turn after, matching the frame the model looked at. Plain
+ *  decode on purpose: the input carries no tag, so there is nothing for the
+ *  browser to apply. */
+export async function adjustPhoto(
+  source: Blob,
+  { turn = null, crop = null }: { turn?: Turn | null; crop?: LfCrop | null },
+): Promise<{ photo: Blob; thumb: Blob }> {
+  const whole = await createImageBitmap(source);
+  let bitmap = whole;
   try {
+    if (crop) {
+      const sx = Math.min(whole.width - 1, Math.max(0, Math.round(crop.x * whole.width)));
+      const sy = Math.min(whole.height - 1, Math.max(0, Math.round(crop.y * whole.height)));
+      const sw = Math.max(1, Math.min(whole.width - sx, Math.round(crop.w * whole.width)));
+      const sh = Math.max(1, Math.min(whole.height - sy, Math.round(crop.h * whole.height)));
+      bitmap = await createImageBitmap(whole, sx, sy, sw, sh);
+    }
+    const orientation = turn ? TURN_ORIENTATION[turn] : 1;
     const [photo, thumb] = await Promise.all([
-      toJpeg(bitmap, TURN_ORIENTATION[turn], PHOTO_MAX, 0.9),
-      toJpeg(bitmap, TURN_ORIENTATION[turn], THUMB_MAX, 0.8),
+      toJpeg(bitmap, orientation, PHOTO_MAX, 0.9),
+      toJpeg(bitmap, orientation, THUMB_MAX, 0.8),
     ]);
     return { photo, thumb };
   } finally {
-    bitmap.close();
+    if (bitmap !== whole) bitmap.close();
+    whole.close();
   }
+}
+
+/** A quarter turn and nothing else: the manual rotate buttons. */
+export function rotatePhoto(source: Blob, turn: Turn): Promise<{ photo: Blob; thumb: Blob }> {
+  return adjustPhoto(source, { turn });
 }

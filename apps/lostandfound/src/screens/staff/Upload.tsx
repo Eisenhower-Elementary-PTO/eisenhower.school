@@ -14,12 +14,12 @@
 // `?ids=` read for the whole batch every few seconds, not a poll per photo.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { LfStaffItemDTO } from "@sd/shared";
+import type { LfCrop, LfStaffItemDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
 import { Icon } from "../../components/Icon.js";
 import { Btn } from "../../components/atoms.js";
 import { api, errorMessage } from "../../lib/api.js";
-import { resizePhoto, rotatePhoto, turnFor, turnWord, type Turn } from "../../lib/lf.js";
+import { adjustPhoto, photoFixWords, resizePhoto, rotatePhoto, turnFor, type Turn } from "../../lib/lf.js";
 
 const LOCATION_KEY = "lf_last_location";
 const UPLOAD_CONCURRENCY = 3;
@@ -68,6 +68,8 @@ interface Row {
   photo: Blob;
   /** The AI's suggested turn, once it has looked; null when it thinks it's upright. */
   turn: Turn | null;
+  /** The AI's suggested crop to the item; null when it fills the frame already. */
+  crop: LfCrop | null;
   turning: boolean;
 }
 
@@ -136,7 +138,7 @@ export function Upload() {
           const it = r.itemId ? byId.get(r.itemId) : undefined;
           if (r.phase !== "describing" || !it || it.tagStatus === "pending") return r;
           if (it.tagStatus === "failed") return { ...r, phase: "failed" };
-          return { ...r, phase: it.heldAt ? "held" : "live", title: it.title, turn: turnFor(it.suggestedRotation) };
+          return { ...r, phase: it.heldAt ? "held" : "live", title: it.title, turn: turnFor(it.suggestedRotation), crop: it.suggestedCrop };
         }),
       );
     }, POLL_MS);
@@ -208,17 +210,18 @@ export function Upload() {
     }
   };
 
-  /** Apply the AI's suggested turn to an uploaded item: re-made from the photo
-   *  still in memory and sent back. The description stands — it's the same item. */
+  /** Apply the AI's suggested turn and/or crop to an uploaded item: re-made
+   *  from the photo still in memory and sent back. The description stands, as
+   *  it's the same item. */
   const applyTurn = async (r: Row) => {
-    if (!r.itemId || !r.turn || r.turning) return;
+    if (!r.itemId || (!r.turn && !r.crop) || r.turning) return;
     update(r.key, { turning: true });
     try {
-      const { photo, thumb } = await rotatePhoto(r.photo, r.turn);
+      const { photo, thumb } = await adjustPhoto(r.photo, { turn: r.turn, crop: r.crop });
       await api.replacePhoto(r.itemId, photo);
       await api.uploadThumb(r.itemId, thumb);
       URL.revokeObjectURL(r.preview);
-      update(r.key, { photo, preview: URL.createObjectURL(thumb), turn: null, turning: false });
+      update(r.key, { photo, preview: URL.createObjectURL(thumb), turn: null, crop: null, turning: false });
     } catch {
       update(r.key, { turning: false });
     }
@@ -242,6 +245,7 @@ export function Upload() {
         itemId: null,
         photo: s.photo,
         turn: null,
+        crop: null,
         turning: false,
       })),
       ...rs,
@@ -371,15 +375,17 @@ export function Upload() {
               </div>
               {r.itemId && (
                 <div className="lf-queue-actions">
-                  {r.turn && (
+                  {(r.turn || r.crop) && (
                     <button
                       type="button"
                       className="sd-btn sd-btn-secondary sd-btn-sm"
-                      title={`The AI thinks this photo is ${turnWord(r.turn)}`}
+                      title={`The AI thinks this photo ${r.turn ? "is" : ""} ${photoFixWords(r.turn, r.crop)}`}
                       disabled={r.turning}
                       onClick={() => void applyTurn(r)}
                     >
-                      {r.turning ? "Turning…" : `${r.turn === "ccw" ? "↺" : "↻"} Looks ${turnWord(r.turn)} — fix`}
+                      {r.turning
+                        ? "Fixing…"
+                        : `${r.turn ? (r.turn === "ccw" ? "↺" : "↻") : "⛶"} Looks ${photoFixWords(r.turn, r.crop)} — fix`}
                     </button>
                   )}
                   <Link className="sd-btn sd-btn-ghost sd-btn-sm" to={`/staff/item/${r.itemId}`}>

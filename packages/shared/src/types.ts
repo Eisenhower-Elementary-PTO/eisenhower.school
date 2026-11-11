@@ -2171,6 +2171,17 @@ export type LfTagStatus = "pending" | "tagged" | "failed";
 export const LF_ROTATIONS = [0, 90, 180, 270] as const;
 export type LfRotation = (typeof LF_ROTATIONS)[number];
 
+/** A crop box as fractions (0-1) of the photo's width and height, measured
+ *  from its top-left corner, in the photo AS STORED (before any turn). The
+ *  vision model's suggestion for the tightest frame around the item, so the
+ *  item comes out as large as the picture allows (migration 0046). */
+export interface LfCrop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** A found item as STAFF see it. */
 export interface LfStaffItemDTO extends Omit<LfPublicItemDTO, "pending"> {
   status: LfItemStatus;
@@ -2193,6 +2204,10 @@ export interface LfStaffItemDTO extends Omit<LfPublicItemDTO, "pending"> {
   /** How far the model thinks the photo needs turning, clockwise. Cleared when
    *  staff rotate it. A suggestion only — staff apply it with one tap. */
   suggestedRotation: LfRotation;
+  /** Where the model thinks the item is, as a crop box. Null when the item
+   *  already fills the frame or the model couldn't tell. Cleared when staff
+   *  replace the photo. A suggestion only, applied with one tap. */
+  suggestedCrop: LfCrop | null;
   /** Unclaimed long enough that it's time to donate it (LF_DONATE_AFTER_DAYS). */
   donateDue: boolean;
   openClaims: number;

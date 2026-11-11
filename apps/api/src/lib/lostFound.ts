@@ -33,7 +33,7 @@
 // passes a person on its way to the public page.
 
 import { LF_CATEGORIES, LF_CLAIM_NOTIFY_MAX, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS, lfClaimLocale } from "@sd/shared";
-import type { LfClaimDTO, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
+import type { LfClaimDTO, LfCrop, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
 import type { AuthContext, Env } from "../env.js";
 import { getSetting } from "./db.js";
 import { lostFoundClaimEmail, sendEmail } from "./email.js";
@@ -126,6 +126,8 @@ export interface LfItemRow {
   photo_key: string;
   thumb_key: string | null;
   suggested_rotation: number;
+  /** JSON `LfCrop`, or null (migration 0046). Read through `parseCrop`. */
+  suggested_crop: string | null;
   found_at: string;
   returned_at: string | null;
   created_by: string | null;
@@ -269,6 +271,7 @@ export function staffItemOf(row: LfStaffRow, origin: string): LfStaffItemDTO {
     heldAt: row.held_at,
     returnedAt: row.returned_at,
     suggestedRotation: cleanRotation(row.suggested_rotation),
+    suggestedCrop: parseCrop(row.suggested_crop),
     donateDue: donateDue(row),
     openClaims: row.open_claims,
     memberSubmitted: row.member_submitted === 1,
@@ -367,6 +370,63 @@ export function cleanRotation(v: unknown): LfRotation {
   return (LF_ROTATIONS as readonly unknown[]).includes(n) ? (n as LfRotation) : 0;
 }
 
+/** Breathing room added round the model's box on every side, as a fraction of
+ *  the photo. Models draw boxes a little tight (a cut-off handle is worse than
+ *  a wide margin), and the crop's job is to drop the table, not to trim to
+ *  the pixel. */
+export const CROP_PADDING = 0.03;
+/** A box smaller than this on either side is a model that boxed a detail (a
+ *  logo, a zip pull) rather than the item. Suggesting it would crop the item
+ *  away, so it counts as "no useful crop". */
+export const CROP_MIN_SIDE = 0.2;
+/** A box covering this much of the photo gains nothing worth a re-encode. */
+export const CROP_MAX_AREA = 0.85;
+
+/**
+ * The model's crop, as edges. `left`/`top`/`right`/`bottom` are fractions of
+ * the photo (0-1) and are checked, padded and clamped here: a box that is
+ * inverted, tiny, nearly the whole photo, or not numbers at all is null — "no
+ * crop", the safe answer. Values above 1 up to 100 are read as percentages,
+ * which models sometimes answer in despite the prompt.
+ */
+export function cleanCrop(v: unknown): LfCrop | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const edge = (k: string): number | null => {
+    const raw = typeof o[k] === "string" ? Number((o[k] as string).trim()) : o[k];
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 100) return null;
+    return raw;
+  };
+  const edges = [edge("left"), edge("top"), edge("right"), edge("bottom")];
+  if (edges.some((e) => e === null)) return null;
+  // One scale for the whole box: all four read as percentages if any is over 1.
+  const scale = edges.some((e) => (e as number) > 1) ? 100 : 1;
+  const [l, t, r, b] = (edges as number[]).map((e) => e / scale) as [number, number, number, number];
+  if (r - l < CROP_MIN_SIDE || b - t < CROP_MIN_SIDE) return null;
+  const x = Math.max(0, l - CROP_PADDING);
+  const y = Math.max(0, t - CROP_PADDING);
+  const w = Math.min(1, r + CROP_PADDING) - x;
+  const h = Math.min(1, b + CROP_PADDING) - y;
+  if (w * h > CROP_MAX_AREA) return null;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  return { x: round(x), y: round(y), w: round(w), h: round(h) };
+}
+
+/** Read a stored crop back. Re-validated rather than trusted: a malformed or
+ *  hand-edited cell is "no crop", never a thrown error on the item screen. */
+export function parseCrop(stored: string | null): LfCrop | null {
+  if (!stored) return null;
+  try {
+    const o = JSON.parse(stored) as Partial<LfCrop> | null;
+    if (!o || ![o.x, o.y, o.w, o.h].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+    const { x, y, w, h } = o as LfCrop;
+    if (x < 0 || y < 0 || w < CROP_MIN_SIDE || h < CROP_MIN_SIDE || x + w > 1.001 || y + h > 1.001) return null;
+    return { x, y, w, h };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Remove the words the model read off the item from everything public.
  *
@@ -428,7 +488,8 @@ export async function saveFields(
     location,
     onlyIfPending = false,
     rotation,
-  }: { location?: string; onlyIfPending?: boolean; rotation?: LfRotation } = {},
+    crop,
+  }: { location?: string; onlyIfPending?: boolean; rotation?: LfRotation; crop?: LfCrop | null } = {},
 ): Promise<boolean> {
   const f = scrubNames(raw);
   const current = location ?? (await env.DB.prepare("SELECT location FROM lf_item WHERE id = ?").bind(id).first<string>("location")) ?? "";
@@ -448,12 +509,17 @@ export async function saveFields(
     : "";
   const holdBinds = onlyIfPending && f.visibleText ? [now] : [];
   // Only the model suggests a rotation; a staff save leaves the last one alone.
+  // The crop rides with it (null is an answer: "no crop"; undefined is "not
+  // the model's write"). It sits BEFORE the rotation so the rotation stays the
+  // last bind ahead of the id.
+  const frame = crop === undefined ? "" : ", suggested_crop = ?";
+  const frameBinds = crop === undefined ? [] : [crop ? JSON.stringify(crop) : null];
   const turn = rotation === undefined ? "" : ", suggested_rotation = ?";
   const turnBinds = rotation === undefined ? [] : [rotation];
   const { meta } = await env.DB.prepare(
     `UPDATE lf_item
         SET tag_status = 'tagged', tag_error = NULL, title = ?, description = ?, category = ?, colors = ?,
-            brand = ?, material = ?, visible_text = ?, name_text = ?, tags = ?, location = ?, search_text = ?, updated_at = ?${hold}${turn}
+            brand = ?, material = ?, visible_text = ?, name_text = ?, tags = ?, location = ?, search_text = ?, updated_at = ?${hold}${frame}${turn}
       WHERE id = ?${onlyIfPending ? " AND tag_status = 'pending'" : ""}`,
   )
     .bind(
@@ -470,6 +536,7 @@ export async function saveFields(
       searchTextOf(f, current),
       now,
       ...holdBinds,
+      ...frameBinds,
       ...turnBinds,
       id,
     )
@@ -498,6 +565,7 @@ Reply with only a JSON object with exactly these keys:
 - "name_text": the part of that writing that is a person's name (a child's first or last name, initials, a family name on a label), exactly as written, otherwise "". A brand, team, character, school or slogan is NOT a person's name
 - "tags": array of 5-12 lowercase search keywords a parent might type, including synonyms (e.g. "bottle", "flask", "tumbler") and notable features
 - "rotation": how many degrees the photo must be turned CLOCKWISE so the item stands the way it is normally used or worn (a bottle cap up, a jacket collar up, text reading left to right): exactly one of 0, 90, 180, 270. Use 0 if it is already upright or if you can't tell
+- "crop": the tightest rectangle that contains ALL of the main item and as little else as possible, so that cropping to it makes the item as large as the picture allows. Give its edges as fractions of the photo as you see it (before any turn), measured from the top-left corner: {"left": 0.0-1.0, "top": 0.0-1.0, "right": 0.0-1.0, "bottom": 0.0-1.0}, with left < right and top < bottom. Never cut off part of the item. If the item already fills the photo, use null
 
 Names of people must appear ONLY in "visible_text" and "name_text" — never in the title, description, or tags.
 Never guess a brand or name you can't actually read.`;
@@ -529,13 +597,15 @@ async function describeOnce(ai: Ai, model: string, dataUrl: string): Promise<Des
   const json = extractJson(result);
   const fields = cleanFields(json);
   if (!fields.title) throw new Error("model returned no title");
-  return { fields, rotation: cleanRotation(json.rotation) };
+  return { fields, rotation: cleanRotation(json.rotation), crop: cleanCrop(json.crop) };
 }
 
-/** What one look at a photo yields: the description, and which way is up. */
+/** What one look at a photo yields: the description, which way is up, and
+ *  where the item is (null: no useful crop). */
 export interface Described {
   fields: LfFields;
   rotation: LfRotation;
+  crop: LfCrop | null;
 }
 
 /** Workers AI answers `{ response }` or OpenAI-style `{ choices }`, as a string
@@ -605,8 +675,8 @@ export async function tagItem(env: Env, id: string, jpeg?: ArrayBuffer): Promise
       if (!obj) throw new Error("photo missing from storage");
       jpeg = await obj.arrayBuffer();
     }
-    const { fields, rotation } = await describePhoto(env, jpeg);
-    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation })) await syncVector(env, id);
+    const { fields, rotation, crop } = await describePhoto(env, jpeg);
+    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation, crop })) await syncVector(env, id);
   } catch (err) {
     // Never the model's output in a log line: it may hold a child's name.
     const message = err instanceof Error ? err.message : String(err);

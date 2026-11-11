@@ -1156,6 +1156,13 @@ Worker, sharing one session:
    no canvas; a wrong guess turns a good photo sideways); staff apply with one
    tap and the browser re-encodes under a FRESH R2 key (both media routes
    cache for an hour — overwriting a key keeps serving the old orientation).
+   **It suggests a CROP the same way** (`suggested_crop`, migration 0046): the
+   tightest box round the item, so cropping makes it as large as the frame
+   allows. Fractions of the photo AS STORED, so the browser crops first and
+   turns second (`adjustPhoto`); `cleanCrop` pads, clamps and returns null for
+   an inverted, tiny (a logo, not the item) or near-whole-photo box. Staff-only,
+   spent (NULLed) by the same `PUT …/photo` that spends the rotation, applied
+   by the same one-tap button, never by the Worker.
    **Photos also arrive by EMAIL**: Email Routing hands
    `found@sitemail.eisenhower.school` to the Worker's `email` handler
    (`src/email.ts` → `lib/lostFoundEmail.ts`). The ENVELOPE sender must be an

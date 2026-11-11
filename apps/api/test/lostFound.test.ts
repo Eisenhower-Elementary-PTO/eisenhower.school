@@ -16,7 +16,10 @@ import type { AuditDraft } from "../src/lib/audit.js";
 import {
   LISTED,
   cleanFields,
+  CROP_PADDING,
+  cleanCrop,
   cleanRotation,
+  parseCrop,
   extractJson,
   isListed,
   itemIdOfKey,
@@ -74,6 +77,7 @@ function row(over: Partial<LfItemRow> = {}): LfItemRow {
     photo_key: "01ITEM.jpg",
     thumb_key: "01ITEM-thumb.jpg",
     suggested_rotation: 0,
+    suggested_crop: null,
     found_at: "2026-10-01T15:00:00.000Z",
     returned_at: null,
     created_by: "01U_STAFF",
@@ -945,6 +949,48 @@ describe("the suggested rotation", () => {
     for (const v of [45, -90, 360, "sideways", null, undefined]) expect(cleanRotation(v)).toBe(0);
   });
 
+  it("cleans a crop: padded, clamped, and null for anything unusable", () => {
+    const c = cleanCrop({ left: 0.3, top: 0.3, right: 0.6, bottom: 0.7 })!;
+    expect(c.x).toBeCloseTo(0.3 - CROP_PADDING, 3);
+    expect(c.w).toBeCloseTo(0.3 + 2 * CROP_PADDING, 3);
+    expect(c.y + c.h).toBeCloseTo(0.7 + CROP_PADDING, 3);
+    // Padding never leaves the photo.
+    expect(cleanCrop({ left: 0, top: 0, right: 0.5, bottom: 0.5 })).toMatchObject({ x: 0, y: 0 });
+    // Percentages, as models sometimes answer.
+    expect(cleanCrop({ left: 30, top: 30, right: 60, bottom: 70 })).toEqual(c);
+    // Strings are read like the rotation's.
+    expect(cleanCrop({ left: "0.3", top: "0.3", right: "0.6", bottom: "0.7" })).toEqual(c);
+    for (const v of [
+      null,
+      "box",
+      {},
+      { left: 0.6, top: 0.3, right: 0.3, bottom: 0.7 }, // inverted
+      { left: 0.4, top: 0.4, right: 0.5, bottom: 0.5 }, // a logo, not the item
+      { left: 0.02, top: 0.02, right: 0.98, bottom: 0.98 }, // fills the frame
+      { left: -1, top: 0, right: 0.5, bottom: 0.5 },
+      { left: NaN, top: 0, right: 0.5, bottom: 0.5 },
+    ]) {
+      expect(cleanCrop(v)).toBeNull();
+    }
+  });
+
+  it("reads a stored crop back, or null when the cell is bad", () => {
+    expect(parseCrop(JSON.stringify({ x: 0.1, y: 0.2, w: 0.5, h: 0.6 }))).toEqual({ x: 0.1, y: 0.2, w: 0.5, h: 0.6 });
+    for (const v of [null, "", "not json", "{}", JSON.stringify({ x: 0.9, y: 0, w: 0.5, h: 0.5 })]) {
+      expect(parseCrop(v)).toBeNull();
+    }
+  });
+
+  it("saves the crop with the model's write, ahead of the rotation", async () => {
+    const w = await aiWrite({
+      title: "Red mitten",
+      rotation: 90,
+      crop: { left: 0.3, top: 0.3, right: 0.6, bottom: 0.7 },
+    });
+    expect(w.sql).toMatch(/suggested_crop = \?, suggested_rotation = \?.*AND tag_status = 'pending'/s);
+    expect(w.args.slice(-3)).toEqual([expect.stringContaining('"x"'), 90, "01ITEM"]);
+  });
+
   it("rides the model's guarded write, so staff edits made first still win", async () => {
     const w = await aiWrite({ title: "Red mitten", rotation: 270 });
     expect(w.sql).toMatch(/suggested_rotation = \?.*AND tag_status = 'pending'/s);
@@ -964,6 +1010,7 @@ describe("the suggested rotation", () => {
     } as unknown as HonoEnv["Bindings"];
     await saveFields(env, "01ITEM", cleanFields({ title: "Mitten" }), { location: "Gym" });
     expect(sql).not.toContain("suggested_rotation");
+    expect(sql).not.toContain("suggested_crop");
   });
 
   it("is staff-only", () => {
@@ -971,6 +1018,9 @@ describe("the suggested rotation", () => {
     const r = row({ suggested_rotation: 90 });
     expect(staffItemOf({ ...r, open_claims: 0, created_by_email: null }, ORIGIN).suggestedRotation).toBe(90);
     expect(publicItemOf(r, ORIGIN)).not.toHaveProperty("suggestedRotation");
+    const withCrop = row({ suggested_crop: JSON.stringify({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 }) });
+    expect(staffItemOf({ ...withCrop, open_claims: 0, created_by_email: null }, ORIGIN).suggestedCrop).toEqual({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+    expect(publicItemOf(withCrop, ORIGIN)).not.toHaveProperty("suggestedCrop");
   });
 });
 

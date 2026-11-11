@@ -11,13 +11,13 @@
 // person has looked at it and pressed Publish.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { LF_CATEGORIES, LF_COLORS, type LfItemPatch, type LfStaffItemDetailDTO } from "@sd/shared";
+import { LF_CATEGORIES, LF_COLORS, type LfCrop, type LfItemPatch, type LfStaffItemDetailDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
 import { Swatch } from "../../components/items.js";
 import { Btn } from "../../components/atoms.js";
 import { useI18n } from "../../i18n/index.js";
 import { api, errorMessage, type LfItemAction } from "../../lib/api.js";
-import { formatDay, formatDayTime, rotatePhoto, turnFor, turnWord, type Turn } from "../../lib/lf.js";
+import { adjustPhoto, formatDay, formatDayTime, photoFixWords, turnFor, type Turn } from "../../lib/lf.js";
 
 function patchOf(item: LfStaffItemDetailDTO): LfItemPatch {
   return {
@@ -69,6 +69,8 @@ export function Edit() {
   // While the AI works, poll; take its answer only if the form is untouched.
   const pending = item?.tagStatus === "pending";
   const suggested = item ? turnFor(item.suggestedRotation) : null;
+  const suggestedCrop = item?.suggestedCrop ?? null;
+  const fixWords = photoFixWords(suggested, suggestedCrop);
   useEffect(() => {
     if (!pending) return;
     const timer = setInterval(async () => {
@@ -121,24 +123,31 @@ export function Edit() {
     }
   };
 
-  /** Turn the photo a quarter: fetched back from the staff media route,
-   *  turned in the browser (the Worker has no canvas), then sent as a new photo
-   *  and thumbnail. The description is left alone — the item didn't change. */
-  const rotate = async (turn: Turn) => {
+  /** Turn the photo a quarter and/or crop it to the item: fetched back from
+   *  the staff media route, re-made in the browser (the Worker has no canvas),
+   *  then sent as a new photo and thumbnail. The description is left alone, as
+   *  the item didn't change. */
+  const rotate = async (turn: Turn | null, crop: LfCrop | null = null) => {
     if (!item) return;
     setBusy(true);
     setNote(null);
     try {
       const res = await fetch(item.photoUrl, { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error(`photo ${res.status}`);
-      const { photo, thumb } = await rotatePhoto(await res.blob(), turn);
+      const { photo, thumb } = await adjustPhoto(await res.blob(), { turn, crop });
       await api.replacePhoto(id, photo);
       await api.uploadThumb(id, thumb);
       // Keep any unsaved typing: take the new photo URLs, not the whole item.
       const fresh = await api.staffItem(id);
       setItem((prev) =>
         prev
-          ? { ...prev, photoUrl: fresh.photoUrl, thumbUrl: fresh.thumbUrl, suggestedRotation: fresh.suggestedRotation }
+          ? {
+              ...prev,
+              photoUrl: fresh.photoUrl,
+              thumbUrl: fresh.thumbUrl,
+              suggestedRotation: fresh.suggestedRotation,
+              suggestedCrop: fresh.suggestedCrop,
+            }
           : fresh,
       );
     } catch (err) {
@@ -171,11 +180,12 @@ export function Edit() {
           <div className="lf-detail">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <img className="lf-photo" src={item.photoUrl} alt={item.title || "Found item"} />
-              {suggested && (
+              {fixWords && (
                 <div className="lf-notice" role="status" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ flex: 1, minWidth: 180 }}>The AI thinks this photo is {turnWord(suggested)}.</span>
-                  <Btn sm disabled={busy} onClick={() => void rotate(suggested)}>
-                    {suggested === "ccw" ? "↺" : "↻"} Turn it upright
+                  <span style={{ flex: 1, minWidth: 180 }}>The AI thinks this photo {suggested ? "is" : ""} {fixWords}.</span>
+                  <Btn sm disabled={busy} onClick={() => void rotate(suggested, suggestedCrop)}>
+                    {suggested ? (suggested === "ccw" ? "↺" : "↻") : "⛶"}{" "}
+                    {suggested && suggestedCrop ? "Turn upright and crop" : suggested ? "Turn it upright" : "Crop to the item"}
                   </Btn>
                 </div>
               )}

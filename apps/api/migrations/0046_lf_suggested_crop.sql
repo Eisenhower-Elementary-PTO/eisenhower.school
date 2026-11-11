@@ -1,0 +1,16 @@
+-- 0046_lf_suggested_crop.sql — the vision model's guess at the tightest box
+-- around the item in a lost & found photo, so cropping to it makes the item
+-- as large as the picture allows.
+--
+-- Same posture as `suggested_rotation` (0035): the model already looks at every
+-- photo, so it also says where the item is. It is a SUGGESTION, not an edit (a
+-- Worker has no canvas, and a model can box the wrong thing): staff see it and
+-- apply it with one tap, the browser re-encodes the photo and sends it back
+-- through PUT /lostfound/items/:id/photo, which resets this to NULL.
+--
+-- Stored as JSON {"x","y","w","h"}: fractions 0-1 of the photo's width/height
+-- from its top-left, in the photo AS STORED (before any suggested turn; the
+-- client crops first, then turns). NULL means "no useful crop": the item
+-- already fills the frame, or the model couldn't tell. Staff-only, like the
+-- rotation: it never enters `publicItemOf`.
+ALTER TABLE lf_item ADD COLUMN suggested_crop TEXT;

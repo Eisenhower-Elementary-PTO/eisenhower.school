@@ -377,8 +377,11 @@ lostFound.put(
 
     const photoKey = versionedKey(row.id, false);
     await c.env.LOSTFOUND_MEDIA.put(photoKey, photo, { httpMetadata: { contentType: JPEG } });
-    // The suggestion is spent: whichever way staff turned it, they've looked.
-    await c.env.DB.prepare("UPDATE lf_item SET photo_key = ?, suggested_rotation = 0, updated_at = ? WHERE id = ?")
+    // Both suggestions are spent: whichever way staff turned or cropped it,
+    // they've looked, and a crop box means nothing on a different frame.
+    await c.env.DB.prepare(
+      "UPDATE lf_item SET photo_key = ?, suggested_rotation = 0, suggested_crop = NULL, updated_at = ? WHERE id = ?",
+    )
       .bind(photoKey, nowIso(), row.id)
       .run();
     await c.env.LOSTFOUND_MEDIA.delete(row.photo_key);
