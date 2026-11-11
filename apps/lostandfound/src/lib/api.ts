@@ -148,9 +148,18 @@ export const api = {
   uploadThumb: (id: string, thumb: Blob) =>
     request<{ ok: true }>(`/lostfound/items/${encodeURIComponent(id)}/thumb`, jpeg("PUT", thumb)),
   /** Replace an item's full-size photo — the app sends it only to rotate one,
-   *  followed by `uploadThumb` with the matching thumbnail. */
-  replacePhoto: (id: string, photo: Blob) =>
-    request<LfStaffItemDTO>(`/lostfound/items/${encodeURIComponent(id)}/photo`, jpeg("PUT", photo)),
+   *  followed by `uploadThumb` with the matching thumbnail. `turn` says how it
+   *  was rotated so the server can turn the item's crop with it. */
+  replacePhoto: (id: string, photo: Blob, turn?: "cw" | "ccw" | "half") =>
+    request<LfStaffItemDTO>(
+      `/lostfound/items/${encodeURIComponent(id)}/photo${turn ? `?turn=${turn}` : ""}`,
+      jpeg("PUT", photo),
+    ),
+  /** Ask the AI for a square that frames the item. The photo is not cut. */
+  autoCrop: (id: string) =>
+    request<LfStaffItemDTO>(`/lostfound/items/${encodeURIComponent(id)}/crop`, action("POST")),
+  clearCrop: (id: string) =>
+    request<LfStaffItemDTO>(`/lostfound/items/${encodeURIComponent(id)}/crop`, action("DELETE")),
   saveItem: (id: string, body: LfItemPatch) =>
     request<LfStaffItemDTO>(`/lostfound/items/${encodeURIComponent(id)}`, patch(body)),
   itemAction: (id: string, act: LfItemAction) =>

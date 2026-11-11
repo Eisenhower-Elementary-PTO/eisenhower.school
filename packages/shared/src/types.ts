@@ -2126,6 +2126,19 @@ export interface LfPublicItemDTO {
   pending: boolean;
   photoUrl: string;
   thumbUrl: string;
+  /** The square the model picked to show the item filling its tile (migration
+   *  0046), or null for the plain centre fit. The photo is never cut: this is
+   *  only where a grid tile looks. */
+  crop: LfCrop | null;
+}
+
+/** A rectangle in fractions (0 to 1) of the photo's width and height, square
+ *  in pixels. `x`, `y` is the top-left corner. */
+export interface LfCrop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface LfPublicListDTO {

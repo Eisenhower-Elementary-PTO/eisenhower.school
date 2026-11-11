@@ -43,6 +43,9 @@ import {
   getStaffItem,
   isJpegBytes,
   lostFoundAccess,
+  cropOf,
+  cropPhoto,
+  isTurn,
   markPending,
   parseClaimNotifyEmails,
   retagStuck,
@@ -51,6 +54,7 @@ import {
   versionedKey,
   syncVector,
   tagItem,
+  turnCrop,
   type LfClaimRow,
   type LfStaffRow,
 } from "../lib/lostFound.js";
@@ -378,8 +382,16 @@ lostFound.put(
     const photoKey = versionedKey(row.id, false);
     await c.env.LOSTFOUND_MEDIA.put(photoKey, photo, { httpMetadata: { contentType: JPEG } });
     // The suggestion is spent: whichever way staff turned it, they've looked.
-    await c.env.DB.prepare("UPDATE lf_item SET photo_key = ?, suggested_rotation = 0, updated_at = ? WHERE id = ?")
-      .bind(photoKey, nowIso(), row.id)
+    // The crop turns WITH the pixels when the caller says how it turned the
+    // photo (`?turn=`); a replacement of unknown geometry drops it, because a
+    // rectangle laid on the wrong picture would cut the item off in the grid.
+    const turn = c.req.query("turn");
+    const before = cropOf(row);
+    const crop = before && isTurn(turn) ? turnCrop(before, turn) : null;
+    await c.env.DB.prepare(
+      "UPDATE lf_item SET photo_key = ?, suggested_rotation = 0, crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?, updated_at = ? WHERE id = ?",
+    )
+      .bind(photoKey, crop?.x ?? null, crop?.y ?? null, crop?.w ?? null, crop?.h ?? null, nowIso(), row.id)
       .run();
     await c.env.LOSTFOUND_MEDIA.delete(row.photo_key);
     c.var.audit.push({
@@ -389,6 +401,67 @@ lostFound.put(
       detail: { photo: "replaced" },
     });
     return itemResponse(c, row.id);
+  }),
+);
+
+/** POST /lostfound/items/:id/crop — ask the model for a square that frames the
+ *  item, and store it. Synchronous: a staff member pressed a button and is
+ *  waiting for the answer. The photo is untouched (migration 0046). */
+lostFound.post(
+  "/items/:id/crop",
+  guarded(async (c) => {
+    await requireStaff(c);
+    const row = await getStaffItem(c.env, param(c, "id"));
+    if (!row) return c.json({ error: "not_found" }, 404);
+    if (!c.env.AI) return c.json({ error: "ai_unavailable", message: "The AI isn't set up on this site." }, 503);
+    const obj = await c.env.LOSTFOUND_MEDIA.get(row.thumb_key ?? row.photo_key);
+    if (!obj) return c.json({ error: "not_found", message: "The photo is missing from storage." }, 404);
+    let crop;
+    try {
+      crop = await cropPhoto(c.env, await obj.arrayBuffer());
+    } catch {
+      console.error(`[lostfound] cropping ${row.id} failed`);
+      return c.json({ error: "ai_failed", message: "The AI couldn't frame this photo. Try again." }, 502);
+    }
+    if (!crop) {
+      return c.json({ error: "no_crop", message: "The AI says the item already fills the photo, so there's nothing to crop." }, 422);
+    }
+    await c.env.DB.prepare(
+      "UPDATE lf_item SET crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?, updated_at = ? WHERE id = ?",
+    )
+      .bind(crop.x, crop.y, crop.w, crop.h, nowIso(), row.id)
+      .run();
+    c.var.audit.push({
+      action: "lostfound.item.updated",
+      entityKind: "lf_item",
+      entityId: row.id,
+      detail: { crop: "set" },
+    });
+    return itemResponse(c, row.id);
+  }),
+);
+
+/** DELETE /lostfound/items/:id/crop — back to the plain centre fit. A repeat
+ *  changes nothing and records nothing. */
+lostFound.delete(
+  "/items/:id/crop",
+  guarded(async (c) => {
+    await requireStaff(c);
+    const id = param(c, "id");
+    const { meta } = await c.env.DB.prepare(
+      "UPDATE lf_item SET crop_x = NULL, crop_y = NULL, crop_w = NULL, crop_h = NULL, updated_at = ? WHERE id = ? AND crop_x IS NOT NULL",
+    )
+      .bind(nowIso(), id)
+      .run();
+    if ((meta?.changes ?? 0) > 0) {
+      c.var.audit.push({
+        action: "lostfound.item.updated",
+        entityKind: "lf_item",
+        entityId: id,
+        detail: { crop: "cleared" },
+      });
+    }
+    return itemResponse(c, id);
   }),
 );
 

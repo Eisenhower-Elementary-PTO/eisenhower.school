@@ -42,6 +42,8 @@
   font-size: 15px; font-weight: 700; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 }
 .lf-card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--bg-2); display: block; }
+.lf-crop { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; background: var(--bg-2); }
+.lf-crop img { position: absolute; max-width: none; aspect-ratio: auto; object-fit: fill; }
 .lf-card-body { padding: 9px 11px 11px; display: flex; flex-direction: column; gap: 5px; }
 .lf-card-title { font-weight: 700; font-size: 14px; line-height: 1.25; }
 .lf-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-3); }
@@ -107,6 +109,9 @@
 }
 .lf-tray-item .lf-tray-rotate { top: auto; right: auto; bottom: 4px; left: 4px; font-size: 16px; }
 .lf-tray-item button:disabled { opacity: 0.5; cursor: default; }
+.lf-crop-panel { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.lf-crop-preview { width: 96px; flex: none; border-radius: var(--r-card); overflow: hidden; }
+.lf-crop-preview > img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .lf-photo-tools { display: flex; gap: 8px; flex-wrap: wrap; }
 .lf-tray-item button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .lf-tray-pending { display: flex; align-items: center; justify-content: center; }

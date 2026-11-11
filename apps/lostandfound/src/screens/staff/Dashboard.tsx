@@ -410,7 +410,7 @@ export function Dashboard() {
         const res = await fetch(item.photoUrl, { credentials: "include", cache: "no-store" });
         if (!res.ok) throw new Error(`photo ${res.status}`);
         const { photo, thumb } = await rotatePhoto(await res.blob(), turn);
-        await api.replacePhoto(item.id, photo);
+        await api.replacePhoto(item.id, photo, turn);
         await api.uploadThumb(item.id, thumb);
         setSelected((prev) => {
           const next = new Set(prev);

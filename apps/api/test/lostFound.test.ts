@@ -16,7 +16,11 @@ import type { AuditDraft } from "../src/lib/audit.js";
 import {
   LISTED,
   cleanFields,
+  cleanCrop,
   cleanRotation,
+  cropOf,
+  jpegSize,
+  turnCrop,
   extractJson,
   isListed,
   itemIdOfKey,
@@ -74,6 +78,10 @@ function row(over: Partial<LfItemRow> = {}): LfItemRow {
     photo_key: "01ITEM.jpg",
     thumb_key: "01ITEM-thumb.jpg",
     suggested_rotation: 0,
+    crop_x: null,
+    crop_y: null,
+    crop_w: null,
+    crop_h: null,
     found_at: "2026-10-01T15:00:00.000Z",
     returned_at: null,
     created_by: "01U_STAFF",
@@ -487,6 +495,7 @@ describe("publicItemOf", () => {
         "brand",
         "category",
         "colors",
+        "crop",
         "description",
         "foundAt",
         "id",
@@ -948,8 +957,9 @@ describe("the suggested rotation", () => {
   it("rides the model's guarded write, so staff edits made first still win", async () => {
     const w = await aiWrite({ title: "Red mitten", rotation: 270 });
     expect(w.sql).toMatch(/suggested_rotation = \?.*AND tag_status = 'pending'/s);
-    // The id is last; the rotation is the bind just before it.
-    expect(w.args.slice(-2)).toEqual([270, "01ITEM"]);
+    // The id is last; the rotation, then the four crop columns (null: the
+    // 3-byte test photo has no readable size), sit just before it.
+    expect(w.args.slice(-6)).toEqual([270, null, null, null, null, "01ITEM"]);
   });
 
   it("is never written by a staff save", async () => {
@@ -971,6 +981,71 @@ describe("the suggested rotation", () => {
     const r = row({ suggested_rotation: 90 });
     expect(staffItemOf({ ...r, open_claims: 0, created_by_email: null }, ORIGIN).suggestedRotation).toBe(90);
     expect(publicItemOf(r, ORIGIN)).not.toHaveProperty("suggestedRotation");
+  });
+});
+
+describe("the suggested crop", () => {
+  it("makes a pixel-square rectangle from the model's centre and size", () => {
+    // 4:3 landscape, square of 0.5 of the short side centred: 0.5*3000 = 1500px
+    const c = cleanCrop({ cx: 0.5, cy: 0.5, size: 0.5 }, 4000, 3000)!;
+    expect(c.w * 4000).toBeCloseTo(1500, 0);
+    expect(c.h * 3000).toBeCloseTo(1500, 0);
+    expect(c.x + c.w / 2).toBeCloseTo(0.5, 3);
+  });
+
+  it("is kept inside the photo", () => {
+    const c = cleanCrop({ cx: 0.98, cy: 0.02, size: 0.4 }, 3000, 3000)!;
+    expect(c.x + c.w).toBeLessThanOrEqual(1);
+    expect(c.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it("is null for nonsense, a sliver, or nearly the whole photo", () => {
+    for (const v of [null, "x", {}, { cx: 2, cy: 0.5, size: 0.5 }, { cx: 0.5, cy: 0.5, size: 0.05 }, { cx: 0.5, cy: 0.5, size: 1 }, { cx: "a", cy: 0.5, size: 0.5 }]) {
+      expect(cleanCrop(v, 3000, 3000)).toBeNull();
+    }
+  });
+
+  it("turns with the photo, and four quarter turns come home", () => {
+    const c = { x: 0.1, y: 0.2, w: 0.3, h: 0.45 };
+    expect(turnCrop(c, "cw")).toEqual({ x: 0.35, y: 0.1, w: 0.45, h: 0.3 });
+    expect(turnCrop(turnCrop(c, "cw"), "ccw")).toEqual(c);
+    expect(turnCrop(turnCrop(c, "half"), "half")).toEqual(c);
+    expect(turnCrop(turnCrop(turnCrop(turnCrop(c, "cw"), "cw"), "cw"), "cw")).toEqual(c);
+  });
+
+  it("is read only when all four columns are sane", () => {
+    expect(cropOf({ crop_x: 0.1, crop_y: 0.1, crop_w: 0.5, crop_h: 0.5 })).toEqual({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+    expect(cropOf({ crop_x: null, crop_y: 0.1, crop_w: 0.5, crop_h: 0.5 })).toBeNull();
+    expect(cropOf({ crop_x: 0.8, crop_y: 0.1, crop_w: 0.5, crop_h: 0.5 })).toBeNull();
+  });
+
+  it("reads a JPEG's size from its header", () => {
+    // SOI, then SOF0: length 17, precision 8, height 0x0300, width 0x0400
+    const b = new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 0x03, 0x00, 0x04, 0x00, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(jpegSize(b.buffer)).toEqual({ width: 1024, height: 768 });
+    expect(jpegSize(new Uint8Array([1, 2, 3, 4]).buffer)).toBeNull();
+  });
+
+  it("rides the model's guarded write and is never written by a staff save", async () => {
+    let sql = "";
+    let args: unknown[] = [];
+    const env = {
+      DB: {
+        prepare(s: string) {
+          sql = s;
+          return { bind: (...a: unknown[]) => ((args = a), { run: async () => ({ meta: { changes: 1 } }) }) };
+        },
+      },
+    } as unknown as HonoEnv["Bindings"];
+    await saveFields(env, "01ITEM", cleanFields({ title: "Mitten" }), { location: "Gym" });
+    expect(sql).not.toContain("crop_x");
+    await saveFields(env, "01ITEM", cleanFields({ title: "Mitten" }), {
+      location: "Gym",
+      onlyIfPending: true,
+      crop: { x: 0.1, y: 0.2, w: 0.3, h: 0.3 },
+    });
+    expect(sql).toMatch(/crop_x = \?, crop_y = \?, crop_w = \?, crop_h = \?.*AND tag_status = 'pending'/s);
+    expect(args.slice(-5)).toEqual([0.1, 0.2, 0.3, 0.3, "01ITEM"]);
   });
 });
 
