@@ -15,6 +15,7 @@ import { LF_CATEGORIES, LF_COLORS, type LfItemPatch, type LfStaffItemDetailDTO }
 import { Screen } from "../../components/Screen.js";
 import { Swatch } from "../../components/items.js";
 import { Btn } from "../../components/atoms.js";
+import { SeenBefore } from "../../components/Similar.js";
 import { useI18n } from "../../i18n/index.js";
 import { api, errorMessage, type LfItemAction } from "../../lib/api.js";
 import { formatDay, formatDayTime, rotatePhoto, turnFor, turnWord, type Turn } from "../../lib/lf.js";
@@ -197,6 +198,7 @@ export function Edit() {
                   View the public page
                 </Link>
               )}
+              <SeenBefore itemId={item.id} ready={item.tagStatus === "tagged"} />
               {item.claims.length > 0 && (
                 <section className="sd-card sd-card-pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h2 className="sd-h2">Claims</h2>

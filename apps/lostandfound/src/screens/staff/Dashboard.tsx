@@ -13,6 +13,7 @@ import type { LfClaimDTO, LfReturnMethod, LfStaffItemDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
 import { ItemCard } from "../../components/items.js";
 import { Btn, Tag } from "../../components/atoms.js";
+import { RepeatsPanel } from "../../components/Similar.js";
 import { useI18n } from "../../i18n/index.js";
 import { api, errorMessage, type LfBulkAction } from "../../lib/api.js";
 import { formatDayTime, rotatePhoto, type Turn } from "../../lib/lf.js";
@@ -612,6 +613,8 @@ export function Dashboard() {
             </div>
           )}
         </section>
+
+        <RepeatsPanel />
       </div>
     </Screen>
   );

@@ -38,6 +38,7 @@ import type { AuthContext, Env } from "../env.js";
 import { getSetting } from "./db.js";
 import { lostFoundClaimEmail, sendEmail } from "./email.js";
 import { rosterAccess, type RosterAccess } from "./rosterGate.js";
+import { dropFingerprint, sweepFingerprints, syncFingerprint } from "./lostFoundSimilar.js";
 import { DAYS, nowIso } from "./time.js";
 
 // ── Access ──────────────────────────────────────────────────────────────────
@@ -606,7 +607,10 @@ export async function tagItem(env: Env, id: string, jpeg?: ArrayBuffer): Promise
       jpeg = await obj.arrayBuffer();
     }
     const { fields, rotation } = await describePhoto(env, jpeg);
-    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation })) await syncVector(env, id);
+    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation })) {
+      await syncVector(env, id);
+      await syncFingerprint(env, id);
+    }
   } catch (err) {
     // Never the model's output in a log line: it may hold a child's name.
     const message = err instanceof Error ? err.message : String(err);
@@ -809,7 +813,8 @@ export async function sweepLostFound(env: Env): Promise<void> {
     )
       .bind(returnedBefore)
       .all<{ id: string; photo_key: string; thumb_key: string | null }>();
-    for (const r of results) await deleteItem(env, r);
+    // The fingerprint stays: the history of what went home is the point of it.
+    for (const r of results) await deleteItem(env, r, { keepHistory: true });
     if (results.length) console.log(`[sweep] removed ${results.length} returned lost & found items`);
 
     const settledBefore = new Date(now - CLAIM_RETENTION_DAYS * DAYS).toISOString();
@@ -817,17 +822,23 @@ export async function sweepLostFound(env: Env): Promise<void> {
       .bind(settledBefore)
       .run();
     if (res.meta?.changes) console.log(`[sweep] removed ${res.meta.changes} settled lost & found claims`);
+    await sweepFingerprints(env);
   } catch (err) {
     console.error(`[sweep] lost & found failed: ${String(err)}`);
   }
 }
 
-/** Delete an item for good: row (claims cascade), photos, vector. */
+/** Delete an item for good: row (claims cascade), photos, vector, and — unless
+ *  `keepHistory` (the retention sweep of a RETURNED item) — its fingerprint: an
+ *  item staff delete by hand (a face in frame, spam, a mistake) should leave
+ *  nothing behind, while one that simply went home keeps its history. */
 export async function deleteItem(
   env: Env,
   item: { id: string; photo_key: string; thumb_key: string | null },
+  { keepHistory = false }: { keepHistory?: boolean } = {},
 ): Promise<void> {
   await env.DB.prepare("DELETE FROM lf_item WHERE id = ?").bind(item.id).run();
+  if (!keepHistory) await dropFingerprint(env, item.id);
   await env.LOSTFOUND_MEDIA.delete([item.photo_key, ...(item.thumb_key ? [item.thumb_key] : [])]);
   try {
     await env.LOSTFOUND_VECTORS?.deleteByIds([item.id]);

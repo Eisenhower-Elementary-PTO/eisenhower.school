@@ -1532,7 +1532,7 @@ const en: Strings = {
   privacyLostFoundTitle:
     "Lost & found",
   privacyLostFoundBody:
-    "The lost & found is the one part of this site that is public by design: staff and signed-in members photograph items turned in at school, and anyone can browse them. A name written on an item is shown only to staff, never on the public page or in its search; other writing, like a brand, can appear in the description so items stay easy to find. An item with any writing on it — and every item a member adds — stays hidden until a staff member has checked the photo. If you say an item is yours, the name, contact and note you type are seen only by staff, and are deleted 60 days after your request is settled. A returned item and its photo are deleted after 30 days.",
+    "The lost & found is the one part of this site that is public by design: staff and signed-in members photograph items turned in at school, and anyone can browse them. A name written on an item is shown only to staff, never on the public page or in its search; other writing, like a brand, can appear in the description so items stay easy to find. An item with any writing on it — and every item a member adds — stays hidden until a staff member has checked the photo. If you say an item is yours, the name, contact and note you type are seen only by staff, and are deleted 60 days after your request is settled. A returned item and its photo are deleted after 30 days. To help staff spot things that keep getting lost, a short description of each item (not its photo) is kept for up to a year, along with the child's name and classroom if you asked for it back, never your contact details.",
   landingLfBody:
     "Everything turned in at school, with a photo. Search for what's missing and tell the office it's yours.",
   landingLfMore:
@@ -2394,7 +2394,7 @@ const es: Strings = {
   privacyLostFoundTitle:
     "Objetos perdidos",
   privacyLostFoundBody:
-    "Objetos perdidos es la única parte de este sitio que es pública a propósito: el personal y los miembros con sesión iniciada fotografían los objetos que se entregan en la escuela y cualquiera puede verlos. Un nombre escrito en un objeto solo lo ve el personal; nunca aparece en la página pública ni en su búsqueda. Otro texto, como una marca, puede aparecer en la descripción para que los objetos sean fáciles de encontrar. Un objeto con algo escrito —y todo objeto agregado por un miembro— queda oculto hasta que alguien del personal revisa la foto. Si dice que un objeto es suyo, el nombre, el contacto y la nota que escriba solo los ve el personal, y se borran 60 días después de resolverse su solicitud. Un objeto devuelto y su foto se borran a los 30 días.",
+    "Objetos perdidos es la única parte de este sitio que es pública a propósito: el personal y los miembros con sesión iniciada fotografían los objetos que se entregan en la escuela y cualquiera puede verlos. Un nombre escrito en un objeto solo lo ve el personal; nunca aparece en la página pública ni en su búsqueda. Otro texto, como una marca, puede aparecer en la descripción para que los objetos sean fáciles de encontrar. Un objeto con algo escrito —y todo objeto agregado por un miembro— queda oculto hasta que alguien del personal revisa la foto. Si dice que un objeto es suyo, el nombre, el contacto y la nota que escriba solo los ve el personal, y se borran 60 días después de resolverse su solicitud. Un objeto devuelto y su foto se borran a los 30 días. Para que el personal detecte lo que se pierde una y otra vez, se conserva hasta un año una breve descripción de cada objeto (no su foto), junto con el nombre del niño y su salón si lo reclamó, nunca sus datos de contacto.",
   landingLfBody:
     "Todo lo que se entrega en la escuela, con foto. Busque lo que le falta y avise a la oficina de que es suyo.",
   landingLfMore:
@@ -3231,7 +3231,7 @@ const zh: Strings = {
   privacyLostFoundTitle:
     "失物招领",
   privacyLostFoundBody:
-    "失物招领是本网站唯一有意公开的部分：工作人员和已登录的成员会为学校收到的物品拍照，任何人都可以浏览。物品上写的名字只有工作人员能看到，绝不会出现在公开页面或其搜索中；其他文字（例如品牌名）可以出现在描述里，方便大家查找。写有文字的物品，以及成员添加的所有物品，在工作人员检查照片之前都不会公开。如果您认领某件物品，您填写的姓名、联系方式和留言只有工作人员能看到，并会在您的申请处理完毕 60 天后删除。已归还的物品及其照片会在 30 天后删除。",
+    "失物招领是本网站唯一有意公开的部分：工作人员和已登录的成员会为学校收到的物品拍照，任何人都可以浏览。物品上写的名字只有工作人员能看到，绝不会出现在公开页面或其搜索中；其他文字（例如品牌名）可以出现在描述里，方便大家查找。写有文字的物品，以及成员添加的所有物品，在工作人员检查照片之前都不会公开。如果您认领某件物品，您填写的姓名、联系方式和留言只有工作人员能看到，并会在您的申请处理完毕 60 天后删除。已归还的物品及其照片会在 30 天后删除。为了帮助工作人员发现经常丢失的物品，每件物品的简短描述（不含照片）会保留最长一年；如果您认领过该物品，还会保留孩子的姓名和班级，但绝不保留您的联系方式。",
   landingLfBody:
     "学校收到的所有失物，都附有照片。搜索您丢失的东西，并告诉办公室那是您的。",
   landingLfMore:
@@ -4137,7 +4137,7 @@ const so: Strings = {
   privacyLostFoundTitle:
     "Alaabta lumay",
   privacyLostFoundBody:
-    "Alaabta lumay waa qaybta kaliya ee boggan oo si ula kac ah u furan: shaqaalaha iyo xubnaha galay ayaa sawira alaabta dugsiga lagu soo celiyo, qof kastana wuu eegi karaa. Magac shay ku qoran waxaa arka shaqaalaha oo kaliya; weligiis kama muuqdo bogga guud ama raadintiisa. Qoraal kale, sida magaca shirkadda (brand), wuxuu ka muuqan karaa sharaxaadda si alaabta si fudud loo helo. Shay qoraal leh — iyo shay kasta oo xubin ay ku darto — waa la qariyaa ilaa xubin shaqaale ah ay hubiso sawirka. Haddii aad sheegto in shay adiga kuu leeyahay, magaca, xiriirka iyo qoraalka aad qorto waxaa arka shaqaalaha oo kaliya, waxaana la tirtiraa 60 maalmood kadib marka codsigaaga la xalliyo. Shay la celiyay iyo sawirkiisa waxaa la tirtiraa 30 maalmood kadib.",
+    "Alaabta lumay waa qaybta kaliya ee boggan oo si ula kac ah u furan: shaqaalaha iyo xubnaha galay ayaa sawira alaabta dugsiga lagu soo celiyo, qof kastana wuu eegi karaa. Magac shay ku qoran waxaa arka shaqaalaha oo kaliya; weligiis kama muuqdo bogga guud ama raadintiisa. Qoraal kale, sida magaca shirkadda (brand), wuxuu ka muuqan karaa sharaxaadda si alaabta si fudud loo helo. Shay qoraal leh — iyo shay kasta oo xubin ay ku darto — waa la qariyaa ilaa xubin shaqaale ah ay hubiso sawirka. Haddii aad sheegto in shay adiga kuu leeyahay, magaca, xiriirka iyo qoraalka aad qorto waxaa arka shaqaalaha oo kaliya, waxaana la tirtiraa 60 maalmood kadib marka codsigaaga la xalliyo. Shay la celiyay iyo sawirkiisa waxaa la tirtiraa 30 maalmood kadib. Si shaqaaluhu u ogaado alaabta marar badan lumaysa, sharaxaad kooban oo shay kasta ah (ma aha sawirkiisa) ayaa la haystaa ilaa hal sano, oo ay la socdaan magaca ilmaha iyo fasalkiisa haddii aad dalbatay, weligeed ma aha xogtaada xiriirka.",
   landingLfBody:
     "Wax kasta oo dugsiga lagu soo celiyay, sawir leh. Raadi waxa kaa maqan oo u sheeg xafiiska inuu adiga kuu leeyahay.",
   landingLfMore:

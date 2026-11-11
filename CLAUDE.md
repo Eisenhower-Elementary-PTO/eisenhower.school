@@ -1143,6 +1143,25 @@ Worker, sharing one session:
      typed contact matches, never while masquerading — a chip for staff,
      granting and gating nothing), else what this device last submitted
      (localStorage, written only KNOWN signed-out; `lib/claimDraft.ts`).
+   - **A fingerprint outlives the item** (migration 0046, `lib/lostFoundSimilar.ts`):
+     "seen this before, and who took it home?" and "what keeps getting lost?"
+     need history `lf_item` deliberately forgets (returned items go at 30 days).
+     One `lf_fingerprint` row per described item — embedding (base64 float32,
+     appearance text only, NO writing), category/colours/brand, the lowercased
+     words of `name_text`, and how it ended (`returned_to` = the child the claim
+     named else the claimant, `returned_room` = teacher; NEVER the contact,
+     which stays in `lf_claim` and its 60 days). Not a foreign key, on purpose.
+     The returned-item sweep KEEPS it; a hand delete (`deleteItem` without
+     `keepHistory`) drops it; it expires 365 days after `found_at`. STAFF-ONLY
+     (`GET /lostfound/items/:id/similar`, `GET /lostfound/repeats`, both behind
+     `requireStaff`; nothing in `lostFoundPublic.ts` may import the module) —
+     it reads `name_text` and carries a child's name, so it is invariant 18's
+     rule inverted: the public search can't match on names, staff's can. No
+     second Vectorize index: similarity is computed in the Worker, within a
+     category, over at most `LF_SIMILAR_SCAN` rows. The weights in `similarity()`
+     are an uncalibrated first guess (tune against real returns). `/privacy`
+     says a description and the child's name are kept up to a year (all four
+     languages) and changed first. `test/lostFoundSimilar.test.ts`.
    Staff are a ROSTER (`lostfound_staff_group_id`, `rosterAccess` — invariant
    31), never the self-assertable `staff` capability. Photos live in
    `LOSTFOUND_MEDIA`, its own bucket behind a public route, so it can never

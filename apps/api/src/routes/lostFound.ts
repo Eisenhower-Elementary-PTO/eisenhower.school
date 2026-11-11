@@ -54,6 +54,7 @@ import {
   type LfClaimRow,
   type LfStaffRow,
 } from "../lib/lostFound.js";
+import { recordReturnOwner, repeatGroups, similarTo, syncFingerprint } from "../lib/lostFoundSimilar.js";
 import { genericGroups, groupExists } from "../lib/rosterGate.js";
 import { bindingChannelOn, lostFoundReturnEmail, sendEmailResult } from "../lib/email.js";
 import { DAYS, nowIso } from "../lib/time.js";
@@ -271,6 +272,27 @@ lostFound.get(
   }),
 );
 
+/** GET /lostfound/items/:id/similar — earlier and current items that look like
+ *  this one, and who they went home to (migration 0046). Its own route so the
+ *  detail read doesn't pay for a scan. Empty until the item has been described.
+ *  Staff-only like everything here: results carry a child's name and room. */
+lostFound.get(
+  "/items/:id/similar",
+  guarded(async (c) => {
+    await requireStaff(c);
+    return c.json({ similar: await similarTo(c.env, param(c, "id"), originOf(c)) });
+  }),
+);
+
+/** GET /lostfound/repeats — clusters of items that keep turning up. */
+lostFound.get(
+  "/repeats",
+  guarded(async (c) => {
+    await requireStaff(c);
+    return c.json({ groups: await repeatGroups(c.env, originOf(c)) });
+  }),
+);
+
 /** The body as JPEG bytes, or an error response. The browser re-encodes every
  *  photo through a canvas before upload, so JPEG is the only type accepted —
  *  `isJpegBytes` (shared with the email intake) checks the magic bytes, not
@@ -408,7 +430,7 @@ lostFound.patch(
     }
     // Field names only: the values may include what was written on the item.
     c.var.audit.push({ action: "lostfound.item.updated", entityKind: "lf_item", entityId: id });
-    c.executionCtx.waitUntil(syncVector(c.env, id));
+    c.executionCtx.waitUntil(Promise.all([syncVector(c.env, id), syncFingerprint(c.env, id)]).then(() => undefined));
     return itemResponse(c, id);
   }),
 );
@@ -503,7 +525,9 @@ lostFound.post(
     if (after.length) await c.env.DB.batch(after);
     for (const id of changed) c.var.audit.push({ action: t.action, entityKind: "lf_item", entityId: id });
     if (changed.length) {
-      c.executionCtx.waitUntil(Promise.all(changed.map((id) => syncVector(c.env, id))).then(() => undefined));
+      c.executionCtx.waitUntil(
+        Promise.all(changed.flatMap((id) => [syncVector(c.env, id), syncFingerprint(c.env, id)])).then(() => undefined),
+      );
     }
     return c.json({ ok: true, changed: changed.length });
   }),
@@ -519,7 +543,7 @@ for (const [name, t] of Object.entries(TRANSITIONS)) {
       if ((res.meta?.changes ?? 0) > 0) {
         if (t.after) await c.env.DB.batch(t.after(c, id));
         c.var.audit.push({ action: t.action, entityKind: "lf_item", entityId: id });
-        c.executionCtx.waitUntil(syncVector(c.env, id));
+        c.executionCtx.waitUntil(Promise.all([syncVector(c.env, id), syncFingerprint(c.env, id)]).then(() => undefined));
       }
       return itemResponse(c, id);
     }),
@@ -648,7 +672,13 @@ lostFound.post(
     if ((res.meta?.changes ?? 0) > 0) {
       if (t.after) await c.env.DB.batch(t.after(c, claim.item_id));
       c.var.audit.push({ action: t.action, entityKind: "lf_item", entityId: claim.item_id });
-      c.executionCtx.waitUntil(syncVector(c.env, claim.item_id));
+      // Order matters: the fingerprint learns the ending first, THEN who it went
+      // home to (the sync's restore branch would clear an owner written earlier).
+      c.executionCtx.waitUntil(
+        syncVector(c.env, claim.item_id)
+          .then(() => syncFingerprint(c.env, claim.item_id))
+          .then(() => recordReturnOwner(c.env, claim.item_id, claim)),
+      );
     }
 
     if (!wantNotify) return c.json({ ok: true, notified: false, otherOpenClaims: others });

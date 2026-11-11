@@ -2237,6 +2237,47 @@ export interface LfStaffItemDetailDTO extends LfStaffItemDTO {
   claims: LfClaimDTO[];
 }
 
+/** Why one past or present item looks like another (staff-only). */
+export type LfSimilarReason = "look" | "color" | "brand" | "writing";
+
+/** One earlier or concurrent item that resembles another, from the fingerprint
+ *  index (migration 0046). Staff-only: `returnedTo`/`returnedRoom` are a child's
+ *  name and room. `itemId`/`thumbUrl` are null once the item itself has been
+ *  swept (30 days after a return) — the fingerprint outlives it, the photo
+ *  does not. */
+export interface LfSimilarDTO {
+  itemId: string | null;
+  /** The item is still in the lost & found right now. */
+  here: boolean;
+  title: string;
+  category: string;
+  colors: string[];
+  brand: string;
+  thumbUrl: string | null;
+  foundAt: string;
+  returnedAt: string | null;
+  /** Who it went home to, as the claimant typed it ("" when unknown). */
+  returnedTo: string;
+  returnedRoom: string;
+  /** 0..1, higher is more alike. */
+  score: number;
+  reasons: LfSimilarReason[];
+}
+
+/** A cluster of items that keep turning up: same kind of thing, found again
+ *  and again. Newest member first. */
+export interface LfRepeatGroupDTO {
+  /** The most recent member's title, the cluster's label. */
+  title: string;
+  category: string;
+  count: number;
+  firstFoundAt: string;
+  lastFoundAt: string;
+  /** Distinct "went home to" values across the members, as typed. */
+  returnedTo: string[];
+  items: LfSimilarDTO[];
+}
+
 /** PATCH /lostfound/items/:id — every editable field, sent whole. */
 export interface LfItemPatch {
   title: string;

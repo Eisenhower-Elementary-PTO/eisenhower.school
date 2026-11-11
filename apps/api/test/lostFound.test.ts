@@ -135,6 +135,8 @@ const STAFF_ROUTES: Array<[string, string, unknown?]> = [
   ["GET", "/lostfound/items?view=attention"],
   ["GET", "/lostfound/items?ids=01ITEM,01OTHER"],
   ["GET", "/lostfound/items/01ITEM"],
+  ["GET", "/lostfound/items/01ITEM/similar"],
+  ["GET", "/lostfound/repeats"],
   ["PUT", "/lostfound/items/01ITEM/photo", JPEG],
   ["PATCH", "/lostfound/items/01ITEM", { title: "x" }],
   ["POST", "/lostfound/items/01ITEM/publish", {}],

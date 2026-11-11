@@ -21,6 +21,8 @@ import type {
   LfClaimInput,
   LfItemPatch,
   LfPublicItemDTO,
+  LfRepeatGroupDTO,
+  LfSimilarDTO,
   LfPublicListDTO,
   LfReturnMethod,
   LfSettingsDTO,
@@ -142,6 +144,9 @@ export const api = {
   /** Several items by id, whatever their state — up to 50 per call. */
   staffItemsByIds: (ids: string[]) =>
     request<{ items: LfStaffItemDTO[] }>(`/lostfound/items?ids=${ids.map(encodeURIComponent).join(",")}`),
+  similarItems: (id: string) =>
+    request<{ similar: LfSimilarDTO[] }>(`/lostfound/items/${encodeURIComponent(id)}/similar`),
+  repeatGroups: () => request<{ groups: LfRepeatGroupDTO[] }>("/lostfound/repeats"),
   staffItem: (id: string) => request<LfStaffItemDetailDTO>(`/lostfound/items/${encodeURIComponent(id)}`),
   uploadPhoto: (photo: Blob, location: string) =>
     request<LfStaffItemDTO>(`/lostfound/items?location=${encodeURIComponent(location)}`, jpeg("POST", photo)),
