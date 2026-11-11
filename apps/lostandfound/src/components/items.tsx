@@ -3,6 +3,7 @@
 // staff member sees an item the way a family will.
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
+import type { LfCrop } from "@sd/shared";
 import { useI18n } from "../i18n/index.js";
 import { SWATCHES, colorLabel, foundAgo } from "../lib/lf.js";
 
@@ -20,12 +21,38 @@ export function Swatch({ color }: { color: string }) {
   );
 }
 
+/** A square tile showing the AI's suggested crop of a photo, or the usual
+ *  centre fit when there is none. Only the display moves: the file is whole.
+ *  The crop is a rectangle in fractions of the image, square in pixels, so the
+ *  tile needs no aspect ratio: scaling the image to 1/w by 1/h of the tile and
+ *  shifting it by x/w and y/h puts exactly that rectangle in view. */
+export function CropImage({ src, alt, crop, loading }: { src: string; alt: string; crop?: LfCrop | null; loading?: "lazy" }) {
+  if (!crop) return <img src={src} alt={alt} loading={loading} />;
+  return (
+    <div className="lf-crop">
+      <img
+        src={src}
+        alt={alt}
+        loading={loading}
+        style={{
+          width: `${100 / crop.w}%`,
+          height: `${100 / crop.h}%`,
+          left: `${(-crop.x / crop.w) * 100}%`,
+          top: `${(-crop.y / crop.h) * 100}%`,
+        }}
+      />
+    </div>
+  );
+}
+
 export interface CardItem {
   id: string;
   title: string;
   colors: string[];
   foundAt: string;
   thumbUrl: string;
+  /** The AI's suggested square for the tile; absent or null = centre fit. */
+  crop?: LfCrop | null;
   /** No description yet — the model is still working, or gave up. */
   untitled: boolean;
 }
@@ -52,7 +79,7 @@ export function ItemCard({
     <>
       {/* Alt is the item's title: the photo IS the item, and the title is the
           best words there are for it. An undescribed one says so. */}
-      <img src={item.thumbUrl} alt={title} loading="lazy" />
+      <CropImage src={item.thumbUrl} alt={title} crop={item.crop} loading="lazy" />
       <div className="lf-card-body">
         <div className="lf-card-title">{title}</div>
         <div className="lf-card-meta">

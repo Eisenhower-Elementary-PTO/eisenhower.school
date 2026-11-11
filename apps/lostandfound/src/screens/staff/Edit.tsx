@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { LF_CATEGORIES, LF_COLORS, type LfItemPatch, type LfStaffItemDetailDTO } from "@sd/shared";
 import { Screen } from "../../components/Screen.js";
-import { Swatch } from "../../components/items.js";
+import { CropImage, Swatch } from "../../components/items.js";
 import { Btn } from "../../components/atoms.js";
 import { useI18n } from "../../i18n/index.js";
 import { api, errorMessage, type LfItemAction } from "../../lib/api.js";
@@ -132,17 +132,33 @@ export function Edit() {
       const res = await fetch(item.photoUrl, { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error(`photo ${res.status}`);
       const { photo, thumb } = await rotatePhoto(await res.blob(), turn);
-      await api.replacePhoto(id, photo);
+      await api.replacePhoto(id, photo, turn);
       await api.uploadThumb(id, thumb);
       // Keep any unsaved typing: take the new photo URLs, not the whole item.
       const fresh = await api.staffItem(id);
       setItem((prev) =>
         prev
-          ? { ...prev, photoUrl: fresh.photoUrl, thumbUrl: fresh.thumbUrl, suggestedRotation: fresh.suggestedRotation }
+          ? { ...prev, photoUrl: fresh.photoUrl, thumbUrl: fresh.thumbUrl, suggestedRotation: fresh.suggestedRotation, crop: fresh.crop }
           : fresh,
       );
     } catch (err) {
       setNote({ text: errorMessage(err, "Couldn't rotate the photo. Try again."), warn: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Ask the AI for a square that frames the item, or drop the one it chose.
+   *  Display only: the photo itself is never cut. Takes just the crop from the
+   *  answer, so unsaved typing in the form survives. */
+  const recrop = async (clear: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const fresh = clear ? await api.clearCrop(id) : await api.autoCrop(id);
+      setItem((prev) => (prev ? { ...prev, crop: fresh.crop } : prev));
+    } catch (err) {
+      setNote({ text: errorMessage(err, "Couldn't crop the photo. Try again."), warn: true });
     } finally {
       setBusy(false);
     }
@@ -186,6 +202,28 @@ export function Edit() {
                 <Btn kind="ghost" sm disabled={busy} onClick={() => void rotate("cw")}>
                   ↻ Rotate right
                 </Btn>
+              </div>
+              <div className="lf-crop-panel">
+                <div className="lf-crop-preview">
+                  <CropImage src={item.thumbUrl} alt="" crop={item.crop} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minWidth: 160 }}>
+                  <span className="sd-meta">
+                    {item.crop
+                      ? "Grid tile, framed by the AI. The photo itself is not cut."
+                      : "Grid tile, centered. The AI can frame the item to fill it."}
+                  </span>
+                  <div className="lf-photo-tools">
+                    <Btn kind="ghost" sm disabled={busy} onClick={() => void recrop(false)}>
+                      {item.crop ? "Re-crop with AI" : "Crop with AI"}
+                    </Btn>
+                    {item.crop && (
+                      <Btn kind="ghost" sm disabled={busy} onClick={() => void recrop(true)}>
+                        Clear crop
+                      </Btn>
+                    )}
+                  </div>
+                </div>
               </div>
               <p className="sd-meta" style={{ margin: 0 }}>
                 Found {formatDay(item.foundAt, locale)}

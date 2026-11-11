@@ -33,7 +33,7 @@
 // passes a person on its way to the public page.
 
 import { LF_CATEGORIES, LF_CLAIM_NOTIFY_MAX, LF_COLORS, LF_DONATE_AFTER_DAYS, LF_ROTATIONS, lfClaimLocale } from "@sd/shared";
-import type { LfClaimDTO, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
+import type { LfClaimDTO, LfCrop, LfPublicItemDTO, LfRotation, LfStaffItemDTO } from "@sd/shared";
 import type { AuthContext, Env } from "../env.js";
 import { getSetting } from "./db.js";
 import { lostFoundClaimEmail, sendEmail } from "./email.js";
@@ -126,6 +126,10 @@ export interface LfItemRow {
   photo_key: string;
   thumb_key: string | null;
   suggested_rotation: number;
+  crop_x: number | null;
+  crop_y: number | null;
+  crop_w: number | null;
+  crop_h: number | null;
   found_at: string;
   returned_at: string | null;
   created_by: string | null;
@@ -233,6 +237,7 @@ export function publicItemOf(row: LfItemRow, origin: string): LfPublicItemDTO {
     pending: row.tag_status === "pending",
     photoUrl: mediaUrl(origin, row.photo_key),
     thumbUrl: mediaUrl(origin, row.thumb_key ?? row.photo_key),
+    crop: cropOf(row),
   };
 }
 
@@ -260,6 +265,7 @@ export function staffItemOf(row: LfStaffRow, origin: string): LfStaffItemDTO {
     foundAt: pub.foundAt,
     photoUrl: staffMediaUrl(origin, row.photo_key),
     thumbUrl: staffMediaUrl(origin, row.thumb_key ?? row.photo_key),
+    crop: pub.crop,
     status: row.status,
     tagStatus: row.tag_status,
     tagError: row.tag_error,
@@ -367,6 +373,97 @@ export function cleanRotation(v: unknown): LfRotation {
   return (LF_ROTATIONS as readonly unknown[]).includes(n) ? (n as LfRotation) : 0;
 }
 
+// ── Crop ────────────────────────────────────────────────────────────────────
+//
+// The model suggests a square; nothing is ever cut (migration 0046). The model
+// answers in the terms it is good at (a centre and a size) and the server turns
+// that into a rectangle that is square in PIXELS, which needs the photo's
+// dimensions: read from the JPEG header, because a Worker has no canvas.
+
+/** Width and height from a JPEG's start-of-frame marker; null if unreadable. */
+export function jpegSize(b: ArrayBuffer): { width: number; height: number } | null {
+  const v = new Uint8Array(b);
+  if (v.length < 4 || v[0] !== 0xff || v[1] !== 0xd8) return null;
+  let p = 2;
+  while (p + 4 <= v.length) {
+    if (v[p] !== 0xff) return null;
+    const marker = v[p + 1]!;
+    if (marker === 0xff) {
+      p++;
+      continue;
+    }
+    // Markers with no length: standalone (RSTn, TEM) and SOI/EOI.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+      p += 2;
+      continue;
+    }
+    const len = (v[p + 2]! << 8) | v[p + 3]!;
+    // SOF0-SOF15, except DHT (c4), JPG (c8) and DAC (cc).
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (p + 9 > v.length) return null;
+      const height = (v[p + 5]! << 8) | v[p + 6]!;
+      const width = (v[p + 7]! << 8) | v[p + 8]!;
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    if (len < 2) return null;
+    p += 2 + len;
+  }
+  return null;
+}
+
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+
+/** A row's crop, or null unless all four columns are sane numbers. */
+export function cropOf(row: Pick<LfItemRow, "crop_x" | "crop_y" | "crop_w" | "crop_h">): LfCrop | null {
+  const { crop_x: x, crop_y: y, crop_w: w, crop_h: h } = row;
+  if (x == null || y == null || w == null || h == null) return null;
+  if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > 1.0001 || y + h > 1.0001) {
+    return null;
+  }
+  return { x, y, w, h };
+}
+
+/** The model's `{ cx, cy, size }` (centre as fractions of width and height,
+ *  size as a fraction of the SHORTER side) as a pixel-square rectangle kept
+ *  inside the photo. Null when it is missing, nonsense, absurdly small, or
+ *  would take in nearly the whole photo (nothing to gain over the default). */
+export function cleanCrop(raw: unknown, width: number, height: number): LfCrop | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "string" ? Number(v.trim()) : v);
+  const cx = num(o.cx ?? o.x);
+  const cy = num(o.cy ?? o.y);
+  const size = num(o.size);
+  if (typeof cx !== "number" || typeof cy !== "number" || typeof size !== "number") return null;
+  if (![cx, cy, size].every(Number.isFinite)) return null;
+  if (cx < 0 || cx > 1 || cy < 0 || cy > 1 || size < 0.15 || size > 1) return null;
+  const side = size * Math.min(width, height);
+  const w = side / width;
+  const h = side / height;
+  // Nearly the whole photo: a crop of 97%+ is the default with extra steps.
+  if (w > 0.97 && h > 0.97) return null;
+  const x = Math.min(Math.max(cx - w / 2, 0), 1 - w);
+  const y = Math.min(Math.max(cy - h / 2, 0), 1 - h);
+  return { x: round4(x), y: round4(y), w: round4(w), h: round4(h) };
+}
+
+/** A crop after the photo is turned: the rectangle moves with the pixels.
+ *  Turns are named as in the staff app (`cw`, `ccw`, `half`). */
+export function turnCrop(c: LfCrop, turn: "cw" | "ccw" | "half"): LfCrop {
+  switch (turn) {
+    case "cw":
+      return { x: round4(1 - (c.y + c.h)), y: c.x, w: c.h, h: c.w };
+    case "ccw":
+      return { x: c.y, y: round4(1 - (c.x + c.w)), w: c.h, h: c.w };
+    case "half":
+      return { x: round4(1 - (c.x + c.w)), y: round4(1 - (c.y + c.h)), w: c.w, h: c.h };
+  }
+}
+
+export function isTurn(v: unknown): v is "cw" | "ccw" | "half" {
+  return v === "cw" || v === "ccw" || v === "half";
+}
+
 /**
  * Remove the words the model read off the item from everything public.
  *
@@ -428,7 +525,8 @@ export async function saveFields(
     location,
     onlyIfPending = false,
     rotation,
-  }: { location?: string; onlyIfPending?: boolean; rotation?: LfRotation } = {},
+    crop,
+  }: { location?: string; onlyIfPending?: boolean; rotation?: LfRotation; crop?: LfCrop | null } = {},
 ): Promise<boolean> {
   const f = scrubNames(raw);
   const current = location ?? (await env.DB.prepare("SELECT location FROM lf_item WHERE id = ?").bind(id).first<string>("location")) ?? "";
@@ -450,10 +548,13 @@ export async function saveFields(
   // Only the model suggests a rotation; a staff save leaves the last one alone.
   const turn = rotation === undefined ? "" : ", suggested_rotation = ?";
   const turnBinds = rotation === undefined ? [] : [rotation];
+  // Likewise the crop: the model's write sets it (null = "it found none").
+  const cropSql = crop === undefined ? "" : ", crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?";
+  const cropBinds = crop === undefined ? [] : [crop?.x ?? null, crop?.y ?? null, crop?.w ?? null, crop?.h ?? null];
   const { meta } = await env.DB.prepare(
     `UPDATE lf_item
         SET tag_status = 'tagged', tag_error = NULL, title = ?, description = ?, category = ?, colors = ?,
-            brand = ?, material = ?, visible_text = ?, name_text = ?, tags = ?, location = ?, search_text = ?, updated_at = ?${hold}${turn}
+            brand = ?, material = ?, visible_text = ?, name_text = ?, tags = ?, location = ?, search_text = ?, updated_at = ?${hold}${turn}${cropSql}
       WHERE id = ?${onlyIfPending ? " AND tag_status = 'pending'" : ""}`,
   )
     .bind(
@@ -471,6 +572,7 @@ export async function saveFields(
       now,
       ...holdBinds,
       ...turnBinds,
+      ...cropBinds,
       id,
     )
     .run();
@@ -499,13 +601,15 @@ Reply with only a JSON object with exactly these keys:
 - "tags": array of 5-12 lowercase search keywords a parent might type, including synonyms (e.g. "bottle", "flask", "tumbler") and notable features
 - "rotation": how many degrees the photo must be turned CLOCKWISE so the item stands the way it is normally used or worn (a bottle cap up, a jacket collar up, text reading left to right): exactly one of 0, 90, 180, 270. Use 0 if it is already upright or if you can't tell
 
+- "crop": the smallest SQUARE that contains the whole item with a small margin (about 5%), so the item fills a square tile. Measure it on the photo exactly as it is now, before any rotation. An object with "cx" and "cy" (the square's centre, each 0 to 1 as a fraction of the photo's width and height) and "size" (the square's side, 0 to 1, as a fraction of the photo's SHORTER side). Never cut off any part of the item: if it fills the photo, or you can't tell, use size 1
+
 Names of people must appear ONLY in "visible_text" and "name_text" — never in the title, description, or tags.
 Never guess a brand or name you can't actually read.`;
 
 /** Ask the model once. Plain JSON mode: strict `json_schema` decoding with
  *  long enums made Gemma loop on whitespace until max_tokens on about half the
  *  photos tried, where JSON mode plus `cleanFields` went 10 for 10. */
-async function describeOnce(ai: Ai, model: string, dataUrl: string): Promise<Described> {
+async function describeOnce(ai: Ai, model: string, dataUrl: string, dims: Dims | null): Promise<Described> {
   // The model id is configurable, so it can't be checked against the typed catalog.
   const run = ai.run.bind(ai) as (model: string, input: unknown) => Promise<unknown>;
   const result = await run(model, {
@@ -529,13 +633,66 @@ async function describeOnce(ai: Ai, model: string, dataUrl: string): Promise<Des
   const json = extractJson(result);
   const fields = cleanFields(json);
   if (!fields.title) throw new Error("model returned no title");
-  return { fields, rotation: cleanRotation(json.rotation) };
+  return {
+    fields,
+    rotation: cleanRotation(json.rotation),
+    crop: dims ? cleanCrop(json.crop, dims.width, dims.height) : null,
+  };
+}
+
+type Dims = { width: number; height: number };
+
+const CROP_PROMPT = `You frame photos of items in a school's lost and found for a square grid tile.
+Find the single main item (if several, the most prominent). Choose the smallest SQUARE that contains the WHOLE item with a small margin (about 5%), so the item fills the tile. Never cut off any part of the item.
+
+Reply with only a JSON object: {"crop": {"cx": number, "cy": number, "size": number}}
+- "cx", "cy": the square's centre, each 0 to 1, as a fraction of the photo's width and height
+- "size": the square's side, 0 to 1, as a fraction of the photo's SHORTER side. If the item fills the photo, or you can't tell, use 1
+Measure on the photo exactly as it is now.`;
+
+/** Ask for a crop alone (the edit page's "crop with AI"). Null when the model
+ *  found nothing worth cropping to; throws when it can't answer. */
+export async function cropPhoto(env: Env, jpeg: ArrayBuffer): Promise<LfCrop | null> {
+  if (!env.AI) throw new Error("Workers AI is not bound");
+  const dims = jpegSize(jpeg);
+  if (!dims) throw new Error("photo size unreadable");
+  const model = env.LOSTFOUND_VISION_MODEL || LF_VISION_MODEL;
+  const run = env.AI.run.bind(env.AI) as (model: string, input: unknown) => Promise<unknown>;
+  const dataUrl = toDataUrl(jpeg);
+  let json: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < 2 && !json; attempt++) {
+    try {
+      json = extractJson(
+        await run(model, {
+          messages: [
+            { role: "system", content: CROP_PROMPT },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Frame this item." },
+                { type: "image_url", image_url: { url: dataUrl } },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 200,
+          temperature: 0.1,
+          chat_template_kwargs: { enable_thinking: false },
+        }),
+      );
+    } catch {
+      // Not the error: a JSON.parse failure quotes the model's text.
+      if (attempt === 1) throw new Error("model returned no usable answer");
+    }
+  }
+  return cleanCrop(json?.crop, dims.width, dims.height);
 }
 
 /** What one look at a photo yields: the description, and which way is up. */
 export interface Described {
   fields: LfFields;
   rotation: LfRotation;
+  crop: LfCrop | null;
 }
 
 /** Workers AI answers `{ response }` or OpenAI-style `{ choices }`, as a string
@@ -566,12 +723,13 @@ export async function describePhoto(env: Env, jpeg: ArrayBuffer): Promise<Descri
   if (!env.AI) throw new Error("Workers AI is not bound");
   const model = env.LOSTFOUND_VISION_MODEL || LF_VISION_MODEL;
   const dataUrl = toDataUrl(jpeg);
+  const dims = jpegSize(jpeg);
   try {
-    return await describeOnce(env.AI, model, dataUrl);
+    return await describeOnce(env.AI, model, dataUrl, dims);
   } catch (err) {
     // Not the error: a JSON.parse failure quotes the model's text.
     console.warn("[lostfound] describe attempt failed, retrying once");
-    return describeOnce(env.AI, model, dataUrl);
+    return describeOnce(env.AI, model, dataUrl, dims);
   }
 }
 
@@ -605,8 +763,8 @@ export async function tagItem(env: Env, id: string, jpeg?: ArrayBuffer): Promise
       if (!obj) throw new Error("photo missing from storage");
       jpeg = await obj.arrayBuffer();
     }
-    const { fields, rotation } = await describePhoto(env, jpeg);
-    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation })) await syncVector(env, id);
+    const { fields, rotation, crop } = await describePhoto(env, jpeg);
+    if (await saveFields(env, id, fields, { onlyIfPending: true, rotation, crop })) await syncVector(env, id);
   } catch (err) {
     // Never the model's output in a log line: it may hold a child's name.
     const message = err instanceof Error ? err.message : String(err);
