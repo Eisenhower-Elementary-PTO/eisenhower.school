@@ -46,14 +46,17 @@ export class BingoScanner extends LitElement {
   private stream: MediaStream | null = null;
   private scanTimer: number | null = null;
   private pollTimer: number | null = null;
+  private polling = false;
+  private pollInFlight = false;
+  private calledAt: string | null = null;
   private workCanvas = document.createElement("canvas");
   private readCursor = 0;
   private busy = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
-    void this.poll();
-    this.pollTimer = window.setInterval(() => void this.poll(), POLL_MS);
+    this.polling = true;
+    void this.pollLoop();
     document.addEventListener("visibilitychange", this.onVisibility);
     void this.startCamera();
   }
@@ -61,21 +64,55 @@ export class BingoScanner extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.stopCamera();
-    if (this.pollTimer !== null) clearInterval(this.pollTimer);
+    this.polling = false;
+    if (this.pollTimer !== null) clearTimeout(this.pollTimer);
+    this.pollTimer = null;
     document.removeEventListener("visibilitychange", this.onVisibility);
   }
 
   private onVisibility = (): void => {
     if (document.hidden) this.stopCamera();
-    else void this.startCamera();
+    else {
+      void this.startCamera();
+      // Catch up now rather than waiting out the timer: numbers were called
+      // while the tab was away.
+      void this.pollLoop();
+    }
   };
+
+  /** Continuous poll: one request in flight at a time, the next scheduled
+   *  only after the last settles (a slow network can't stack requests).
+   *  Calling it while a loop is already pending restarts it immediately. */
+  private async pollLoop(): Promise<void> {
+    if (!this.polling) return;
+    if (this.pollTimer !== null) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.pollInFlight) return; // its completion reschedules
+    this.pollInFlight = true;
+    try {
+      await this.poll();
+    } finally {
+      this.pollInFlight = false;
+      if (this.polling) {
+        this.pollTimer = window.setTimeout(() => void this.pollLoop(), POLL_MS);
+      }
+    }
+  }
 
   private async poll(): Promise<void> {
     if (document.hidden) return;
     try {
       const { state } = await api.state();
+      // Ignore an answer older than what we already show.
+      if (this.calledAt && state.updatedAt && state.updatedAt < this.calledAt) return;
+      this.calledAt = state.updatedAt ?? this.calledAt;
+      const changed =
+        state.markedNumbers.length !== this.called.length ||
+        state.markedNumbers.some((n, i) => n !== this.called[i]);
       this.called = state.markedNumbers;
-      this.refreshVerdict();
+      if (changed) this.refreshVerdict();
     } catch {
       // Offline: keep the last-known called numbers; the next poll retries.
     }
