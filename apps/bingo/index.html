@@ -8,8 +8,10 @@
          not one of the four indexed surfaces (CLAUDE.md, "The front door"). -->
     <meta name="robots" content="noindex,nofollow" />
     <meta name="theme-color" content="#222222" />
-    <!-- No external fonts on purpose, unlike the app this is based on: a font
-         CDN is a third party /privacy would have to name. System fonts only. -->
+    <!-- Gotham Rounded from Typography.com (the school's cloud.typography.com
+         project). A third party: /privacy names it (privacyServiceFonts). System
+         fonts remain the fallback while it loads or if it is blocked. -->
+    <link rel="stylesheet" type="text/css" href="https://cloud.typography.com/6984932/7462032/css/fonts.css" />
     <link rel="icon" href="data:," />
     <title>Bingo</title>
     <style>
@@ -24,6 +26,7 @@
         justify-content: center;
         background: white;
         font-family:
+          "Gotham Rounded A", "Gotham Rounded B",
           -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
       }
 

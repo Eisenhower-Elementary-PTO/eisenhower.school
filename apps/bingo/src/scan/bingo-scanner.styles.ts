@@ -2,13 +2,14 @@ import { css } from "lit";
 
 // The scanner is a phone-first tool (the board is a projector surface; this
 // is the thing in a parent's hand under cafeteria lighting), so unlike the
-// board it follows the system theme. Same house red, same system fonts.
+// board it follows the system theme. Same house red, same Gotham Rounded.
 export const scannerStyles = css`
   :host {
     display: flex;
     flex-direction: column;
     min-height: 100dvh;
     font-family:
+      "Gotham Rounded A", "Gotham Rounded B",
       -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     background: #fff;
     color: #222;

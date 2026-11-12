@@ -21,6 +21,7 @@ export const boardStyles = css`
     height: 100%;
     width: 100%;
     font-family:
+      "Gotham Rounded A", "Gotham Rounded B",
       -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
 

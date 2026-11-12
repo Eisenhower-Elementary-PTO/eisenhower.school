@@ -556,6 +556,7 @@ export interface Strings {
   privacyServiceTranslate: string;
   privacyServiceAdmin: string;
   privacyServiceAi: string;
+  privacyServiceFonts: string;
   privacyLostFoundTitle: string;
   privacyLostFoundBody: string;
   /** The front door's lost & found tile (title is `navLostFound`). */
@@ -1533,6 +1534,8 @@ const en: Strings = {
     "Slack — a private channel the site's administrator uses receives a notice, including the email address, when someone new signs up.",
   privacyServiceAi:
     "Cloudflare Workers AI — describes lost & found photos so they can be searched, and, when a newsletter editor asks, suggests edits to a newsletter draft. Only those photos and drafts are sent to it, never anything from the directory.",
+  privacyServiceFonts:
+    "Typography.com (Hoefler&Co) — supplies the typeface on the game-night bingo board. Your browser fetches the font files from them directly, so they see that request (your IP address and browser), nothing from the directory.",
   privacyLostFoundTitle:
     "Lost & found",
   privacyLostFoundBody:
@@ -2399,6 +2402,8 @@ const es: Strings = {
     "Slack: un canal privado que usa el administrador del sitio recibe un aviso, con la dirección de correo, cuando alguien nuevo se registra.",
   privacyServiceAi:
     "Cloudflare Workers AI: describe las fotos de objetos perdidos para que se puedan buscar y, cuando una editora del boletín lo pide, sugiere cambios a un borrador del boletín. Solo recibe esas fotos y borradores, nunca nada del directorio.",
+  privacyServiceFonts:
+    "Typography.com (Hoefler&Co): suministra la tipografía del tablero de bingo de la noche de juegos. Tu navegador descarga los archivos de la fuente directamente de ellos, así que ven esa solicitud (tu dirección IP y tu navegador), nada del directorio.",
   privacyLostFoundTitle:
     "Objetos perdidos",
   privacyLostFoundBody:
@@ -3240,6 +3245,8 @@ const zh: Strings = {
   privacyServiceAdmin: "Slack——网站管理员使用的一个私人频道，会在有新用户注册时收到通知，其中包含其邮箱地址。",
   privacyServiceAi:
     "Cloudflare Workers AI——为失物招领的照片生成描述以便搜索；在通讯编辑提出请求时，也会对通讯草稿提出修改建议。只会发送这些照片和草稿，绝不会发送目录中的任何内容。",
+  privacyServiceFonts:
+    "Typography.com (Hoefler&Co)——为游戏之夜宾果板提供字体。您的浏览器会直接从他们那里获取字体文件，因此他们能看到这次请求（您的 IP 地址和浏览器），但看不到目录中的任何内容。",
   privacyLostFoundTitle:
     "失物招领",
   privacyLostFoundBody:
@@ -4150,6 +4157,8 @@ const so: Strings = {
     "Slack — kanaal gaar ah oo maamulaha boggu isticmaalo ayaa hela ogeysiis, oo ay ku jirto cinwaanka iimaylka, marka qof cusub isdiiwaangeliyo.",
   privacyServiceAi:
     "Cloudflare Workers AI — wuxuu sharxaa sawirrada alaabta lumay si loo raadin karo, oo marka tifaftiraha wargeysku codsado, wuxuu soo jeediyaa isbeddello lagu sameeyo qoraalka wargeyska. Waxaa loo dira kaliya sawirradaas iyo qoraalladaas, weligeedna wax ka mid ah hagaha looma diro.",
+  privacyServiceFonts:
+    "Typography.com (Hoefler&Co) — wuxuu bixiyaa far-qoraalka looxa bingo-ga ee habeenka ciyaarta. Browser-kaagu wuxuu faylasha farta si toos ah uga soo qaadaa iyaga, sidaas darteed waxay arkaan codsigaas (cinwaanka IP-gaaga iyo browser-kaaga), laakiin waxba kama arkaan hagaha.",
   privacyLostFoundTitle:
     "Alaabta lumay",
   privacyLostFoundBody:

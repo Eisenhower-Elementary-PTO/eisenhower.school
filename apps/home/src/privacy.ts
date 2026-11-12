@@ -57,7 +57,7 @@ export const PRIVACY_PATH = "/privacy";
  * shape of a dark pattern. Bump it when the WORDS change, not when the Worker
  * redeploys.
  */
-const LAST_UPDATED = "2026-10-11";
+const LAST_UPDATED = "2026-11-11";
 
 function updatedLabel(locale: Locale): string {
   // The day is formatted in the reader's locale but fixed in the school's
@@ -99,6 +99,7 @@ export function renderPrivacy(env: Env, locale: Locale, explicit: boolean): stri
     // looks at photos" is a different act from "stores the database", and a
     // reader deciding whether to trust the lost & found should find it.
     s.privacyServiceAi,
+    s.privacyServiceFonts,
   ]
     .map((line) => `<li>${escapeHtml(line)}</li>`)
     .join("");
