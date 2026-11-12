@@ -1,12 +1,12 @@
 // The card-check app (/scan): point the phone at ANY Finger-Tip shutter
-// card and get a verdict against the live board — no registration, no per-
-// card setup (the school owns 500+ cards). All vision runs in this tab:
-// grid detection and shutter states every frame (vision.ts), printed
-// numbers read through open windows AND translucent shutters with
-// column-constrained template matching (reader.ts), fused across frames
-// until each cell settles (fusion.ts), refereed against the called numbers
-// (check.ts). A tap on any square corrects a misread; "next card" resets
-// for the following player. The only network traffic is the same
+// card and learn whether its numbers make a winner against the live board —
+// no registration, no per-card setup (the school owns 500+ cards). Which
+// shutters are slid is IGNORED: only the printed numbers matter. All vision
+// runs in this tab: grid detection every frame (vision.ts), printed numbers
+// read through open windows AND translucent shutters with column-constrained
+// template matching (reader.ts), fused across frames until each cell settles
+// (fusion.ts), refereed against the called numbers (check.ts). A tap on any
+// square corrects a misread; "next card" resets for the following player. The only network traffic is the same
 // /bingo-public/state poll the spectator board makes.
 
 import { LitElement, html, nothing, type TemplateResult } from "lit";
@@ -25,7 +25,6 @@ const SCAN_INTERVAL_MS = 700;
 const POLL_MS = 5000;
 /** Number reads per tick — the heavy half of a frame stays bounded. */
 const READS_PER_TICK = 8;
-const LETTERS = ["B", "I", "N", "G", "O"] as const;
 
 @customElement("bingo-scanner")
 export class BingoScanner extends LitElement {
@@ -200,9 +199,9 @@ export class BingoScanner extends LitElement {
     }
   }
 
-  /** Feed one frame into the fusion: states for all cells, number reads for
-   *  up to `readBudget` unsettled ones (covered cells first — they gate the
-   *  verdict). A poorly aligned frame is discarded whole. */
+  /** Feed one frame into the fusion: number reads for up to `readBudget`
+   *  unsettled cells. A poorly aligned frame is discarded whole. The shutter
+   *  state only picks the reader's mode (covered numbers show through red). */
   private ingestFrame(region: Rgba, readBudget: number): void {
     const scan = scanCard(region);
     this.scan = scan;
@@ -210,12 +209,7 @@ export class BingoScanner extends LitElement {
       this.refreshVerdict();
       return;
     }
-    for (const cell of scan.cells) {
-      this.fusion.addState(cell.row * 5 + cell.col, cell.state);
-    }
-    const pending = scan.cells
-      .filter((c) => this.fusion.needsReading(c.row * 5 + c.col) && c.state !== "uncertain")
-      .sort((a, b) => Number(b.state === "marked") - Number(a.state === "marked"));
+    const pending = scan.cells.filter((c) => this.fusion.needsReading(c.row * 5 + c.col));
     // Round-robin so a hard cell can't starve the rest.
     const start = this.readCursor % Math.max(1, pending.length);
     for (let k = 0; k < Math.min(readBudget, pending.length); k++) {
@@ -227,7 +221,7 @@ export class BingoScanner extends LitElement {
         cell.cy,
         WIN_W,
         WIN_H,
-        cell.state === "marked" ? "red" : "open",
+        cell.redFrac > 0.35 ? "red" : "open",
         cell.col,
       );
       this.fusion.addReading(cell.row * 5 + cell.col, reading);
@@ -239,7 +233,7 @@ export class BingoScanner extends LitElement {
   private refreshVerdict(): void {
     this.numbers = this.fusion.numbers();
     this.settled = this.fusion.settledCount();
-    this.result = checkCard(this.numbers, this.fusion.states(), this.called);
+    this.result = checkCard(this.fusion.settledNumbers(), this.called);
   }
 
   /** Photo fallback (no camera, or desktop): the file must show just the
@@ -340,21 +334,7 @@ export class BingoScanner extends LitElement {
       </p>`;
     }
     if (result.lines.length > 0) return html`<p class="banner bingo">${t("bingoScanBingo")}</p>`;
-    if (result.falseMarks.length > 0) {
-      return html`<p class="banner bad">
-        ${t("bingoScanFalseMarks", { nums: this.withLetters(result.falseMarks) })}
-      </p>`;
-    }
-    return html`
-      <p class="banner good">${t("bingoScanClean")}</p>
-      ${result.missed.length > 0
-        ? html`<p class="note">${t("bingoScanMissed", { nums: this.withLetters(result.missed) })}</p>`
-        : nothing}
-    `;
-  }
-
-  private withLetters(nums: number[]): string {
-    return nums.map((n) => `${LETTERS[Math.floor((n - 1) / 15)] ?? ""}${n}`).join(", ");
+    return html`<p class="banner good">${t("bingoScanClean")}</p>`;
   }
 
   private renderGrid(): TemplateResult {

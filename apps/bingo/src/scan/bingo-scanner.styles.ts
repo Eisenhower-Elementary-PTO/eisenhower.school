@@ -65,8 +65,7 @@ export const scannerStyles = css`
     background: rgba(255, 255, 255, 0.94);
   }
 
-  :host([data-verdict]) .result .cell.good-mark,
-  :host([data-verdict]) .result .cell.false-mark {
+  :host([data-verdict]) .result .cell.called {
     border-color: rgba(255, 255, 255, 0.85);
   }
 
@@ -141,14 +140,8 @@ export const scannerStyles = css`
     box-sizing: border-box;
   }
 
-  .dot.good-mark {
+  .dot.called {
     background: var(--good);
-  }
-  .dot.false-mark {
-    background: var(--red);
-  }
-  .dot.missed {
-    background: var(--info);
   }
   .dot.uncertain {
     background: var(--warn);
@@ -235,21 +228,10 @@ export const scannerStyles = css`
     cursor: pointer;
   }
 
-  .result .cell.good-mark {
+  .result .cell.called {
     background: var(--good);
     border-color: var(--good);
     color: white;
-  }
-
-  .result .cell.false-mark {
-    background: var(--red);
-    border-color: var(--red);
-    color: white;
-  }
-
-  .result .cell.missed {
-    border-color: var(--info);
-    color: var(--info);
   }
 
   .result .cell.uncertain {

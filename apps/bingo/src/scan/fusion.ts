@@ -1,11 +1,10 @@
 // Multi-frame fusion: one camera frame is a guess, agreement across frames
 // is a reading. Numbers are printed, so once a cell's value is locked it
-// stays locked (only shutter STATES change during a game, and those are
-// re-classified every frame). A human tap always wins.
+// stays locked. A human tap always wins. (Shutter positions are not tracked:
+// the verdict depends on the printed numbers alone.)
 //
 // Pure TS, no DOM — the lock rules are testable without a camera.
 
-import type { CellState } from "./vision.js";
 import type { CellReading } from "./reader.js";
 
 interface ValueVotes {
@@ -19,8 +18,6 @@ interface CellTrack {
   votes: Map<number, ValueVotes>;
   pinned: number | null;
   locked: number | null;
-  /** Most recent state classifications, newest last (window of 3). */
-  recent: CellState[];
 }
 
 export class CardFusion {
@@ -28,7 +25,6 @@ export class CardFusion {
     votes: new Map<number, ValueVotes>(),
     pinned: null,
     locked: null,
-    recent: [],
   }));
 
   reset(): void {
@@ -36,7 +32,6 @@ export class CardFusion {
       votes: new Map<number, ValueVotes>(),
       pinned: null,
       locked: null,
-      recent: [],
     }));
   }
 
@@ -45,13 +40,6 @@ export class CardFusion {
     if (i === 12) return false;
     const c = this.cells[i];
     return !!c && c.pinned === null && c.locked === null;
-  }
-
-  addState(i: number, state: CellState): void {
-    const c = this.cells[i];
-    if (!c) return;
-    c.recent.push(state);
-    if (c.recent.length > 3) c.recent.shift();
   }
 
   addReading(i: number, reading: CellReading | null): void {
@@ -98,29 +86,17 @@ export class CardFusion {
     return { value: best, settled: false };
   }
 
-  /** Majority of the recent state window (ties go to the newest). */
-  stateAt(i: number): CellState {
-    const c = this.cells[i];
-    if (!c || c.recent.length === 0) return "uncertain";
-    const counts = new Map<CellState, number>();
-    for (const s of c.recent) counts.set(s, (counts.get(s) ?? 0) + 1);
-    let best: CellState = c.recent[c.recent.length - 1] ?? "uncertain";
-    let bestN = 0;
-    for (const [s, n] of counts) {
-      if (n > bestN || (n === bestN && s === c.recent[c.recent.length - 1])) {
-        best = s;
-        bestN = n;
-      }
-    }
-    return best;
-  }
-
   numbers(): (number | null)[] {
     return Array.from({ length: 25 }, (_, i) => this.numberAt(i).value);
   }
 
-  states(): CellState[] {
-    return Array.from({ length: 25 }, (_, i) => this.stateAt(i));
+  /** Only settled values (pinned or locked), FREE as 0. A verdict that can
+   *  declare a winner must not rest on a best guess. */
+  settledNumbers(): (number | null)[] {
+    return Array.from({ length: 25 }, (_, i) => {
+      const n = this.numberAt(i);
+      return n.settled ? n.value : null;
+    });
   }
 
   settledCount(): number {
