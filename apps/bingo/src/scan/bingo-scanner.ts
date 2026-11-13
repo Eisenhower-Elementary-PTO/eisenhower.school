@@ -236,29 +236,6 @@ export class BingoScanner extends LitElement {
     this.result = checkCard(this.fusion.settledNumbers(), this.called);
   }
 
-  /** Photo fallback (no camera, or desktop): the file must show just the
-   *  card — its edges are treated as the guide frame. */
-  private async checkFromFile(file: File): Promise<void> {
-    try {
-      const bitmap = await createImageBitmap(file);
-      const canvas = this.workCanvas;
-      const scale = Math.min(1, 1600 / bitmap.width);
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      const region = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      // A photo is one shot: read every cell now, twice (the fusion lock
-      // rule wants agreement, and both passes share the segmentations'
-      // deterministic result, so a confident read settles immediately).
-      this.ingestFrame(region, 24);
-      this.ingestFrame(region, 24);
-    } catch {
-      // Unreadable file: leave the current state alone.
-    }
-  }
-
   private nextCard(): void {
     this.fusion.reset();
     this.editing = null;
@@ -283,24 +260,11 @@ export class BingoScanner extends LitElement {
     return html`
       <main class="scanview">
         ${this.renderViewfinder()}
-        ${this.renderBanner()}
-        ${this.renderGrid()}
-        <div class="actions">
-          <button class="secondary" @click=${this.nextCard}>${t("bingoScanNext")}</button>
-          <label class="photo button-like">
-            ${t("bingoScanPhoto")}
-            <input
-              type="file"
-              accept="image/*"
-              @change=${(e: Event) => {
-                const input = e.target as HTMLInputElement;
-                const file = input.files?.[0];
-                input.value = "";
-                if (file) void this.checkFromFile(file);
-              }}
-            />
-          </label>
+        <div class="statusrow">
+          <div class="statuscol">${this.renderBanner()}</div>
+          ${this.renderNextButton()}
         </div>
+        ${this.renderGrid()}
       </main>
     `;
   }
@@ -322,6 +286,28 @@ export class BingoScanner extends LitElement {
       const verdict = result.verdicts[cell.row * 5 + cell.col] ?? "open";
       return html`<i class="dot ${verdict}" style="left:${cell.cx * 100}%;top:${cell.cy * 100}%"></i>`;
     })}`;
+  }
+
+  /** Square "next card" button beside the status. While the card is aligned
+   *  but not yet read, the refresh icon is swapped for a spinner. */
+  private renderNextButton(): TemplateResult {
+    const scan = this.scan, result = this.result;
+    const aligned = scan !== null && scan.gridQuality >= MIN_GRID_QUALITY;
+    const processing = aligned && !result?.readable;
+    return html`<button
+      class="next ${processing ? "loading" : ""}"
+      aria-label=${t("bingoScanNext")}
+      title=${t("bingoScanNext")}
+      @click=${this.nextCard}
+    >
+      ${processing
+        ? html`<span class="spinner" role="status"></span>`
+        : html`<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+            <path d="M20 4v7h-7" />
+          </svg>`}
+    </button>`;
   }
 
   private renderBanner(): TemplateResult {

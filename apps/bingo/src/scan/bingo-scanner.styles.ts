@@ -262,21 +262,32 @@ export const scannerStyles = css`
     color: inherit;
   }
 
-  /* ── actions ── */
+  /* ── status row: banner + square next-card button ── */
 
-  .actions {
+  .statusrow {
     display: flex;
-    gap: 0.75em;
+    gap: 0.6em;
+    align-items: stretch;
   }
 
-  .actions > * {
+  .statuscol {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    justify-content: center;
   }
 
-  button.secondary {
-    font: inherit;
-    font-weight: 700;
-    padding: 0.85em 1.2em;
+  button.next {
+    flex: none;
+    width: 3.4em;
+    aspect-ratio: 1;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     border-radius: 0.75em;
     background: none;
     border: 2px solid var(--line);
@@ -284,26 +295,19 @@ export const scannerStyles = css`
     cursor: pointer;
   }
 
-  label.photo {
-    text-align: center;
-    color: var(--info);
-    cursor: pointer;
-    font-size: 0.95em;
+  .spinner {
+    width: 1.4em;
+    height: 1.4em;
+    border: 3px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
   }
 
-  label.photo.button-like {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    padding: 0.85em 1.2em;
-    border: 2px solid var(--line);
-    border-radius: 0.75em;
-    box-sizing: border-box;
-  }
-
-  label.photo input {
-    display: none;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 `;
 
