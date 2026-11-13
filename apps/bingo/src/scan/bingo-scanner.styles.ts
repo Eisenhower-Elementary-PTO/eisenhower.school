@@ -73,7 +73,7 @@ export const scannerStyles = css`
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.8em;
+    gap: 0.6em;
     /* Home-screen standalone mode runs edge-to-edge: keep the content out
        of the notch and the home indicator (viewport-fit=cover). */
     padding: calc(1em + env(safe-area-inset-top, 0px)) calc(1em + env(safe-area-inset-right, 0px))
@@ -101,7 +101,11 @@ export const scannerStyles = css`
   .viewfinder {
     position: relative;
     width: 100%;
-    aspect-ratio: 3 / 3.4;
+    /* Just taller than the guide (92% wide x 1.03 aspect = 0.95 of the width),
+       so the whole screen — camera, status AND all five rows of numbers —
+       fits a phone without scrolling. Any taller and the bottom row of the
+       read grid fell below the fold. */
+    aspect-ratio: 1 / 1;
     background: #000;
     border-radius: 0.75em;
     overflow: hidden;
@@ -117,7 +121,7 @@ export const scannerStyles = css`
 
   /* Must mirror guideRect() in bingo-scanner.ts: 92% of the container width,
      centered, aspect set inline — the capture crop uses the same numbers.
-     The container's own aspect-ratio (3/3.4) guarantees the guide fits. */
+     The container's own aspect-ratio (1/1) guarantees the guide fits. */
   .guide {
     position: absolute;
     top: 50%;
@@ -207,15 +211,17 @@ export const scannerStyles = css`
   .grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 0.35em;
+    gap: 0.3em;
   }
 
+  /* Wider than tall: five square rows were as tall as the camera view and
+     pushed the bottom row off the screen. */
   .grid .cell {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    aspect-ratio: 1;
+    aspect-ratio: 1.6;
     border-radius: 0.5em;
     font: inherit;
     font-weight: 700;
@@ -260,6 +266,20 @@ export const scannerStyles = css`
     outline: none;
     background: none;
     color: inherit;
+  }
+
+  /* Short phones (SE-class, or a browser with chrome showing): flatten the
+     cells further so the last row is still on screen. */
+  @media (max-height: 740px) {
+    main {
+      gap: 0.4em;
+      padding-top: calc(0.5em + env(safe-area-inset-top, 0px));
+      padding-bottom: calc(0.5em + env(safe-area-inset-bottom, 0px));
+    }
+    .grid .cell {
+      aspect-ratio: 2.2;
+      font-size: 0.95em;
+    }
   }
 
   /* ── status row: banner + square next-card button ── */
