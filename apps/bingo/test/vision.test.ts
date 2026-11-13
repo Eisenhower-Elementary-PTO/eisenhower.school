@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { decode } from "jpeg-js";
 import { describe, expect, it } from "vitest";
-import { scanCard, WIN_W, WIN_H, MIN_GRID_QUALITY, type Rgba, type CellState } from "../src/scan/vision.js";
+import { scanCard, MIN_GRID_QUALITY, type Rgba, type CellState } from "../src/scan/vision.js";
 import { readCell } from "../src/scan/reader.js";
 import { CardFusion } from "../src/scan/fusion.js";
 import { checkCard } from "../src/scan/check.js";
@@ -34,14 +34,78 @@ const MIXED_NUMBERS = [9,28,31,54,73, 11,24,35,46,70, 1,18,0,49,69, 10,27,32,47,
 // prettier-ignore
 const FIXTURES: { name: string; states: CellState[] }[] = [
   { name: "fix-open.jpg", states: OPEN_STATES },
-  { name: "fix-mixed.jpg", // video still, shutters resting half-open; the
-    // "uncertain" is a window physically half-covered — the honest verdict.
-    states: [O,O,M,O,O, O,"uncertain",M,O,O, O,M,M,M,O, O,O,M,O,O, O,O,M,O,O] },
+  { name: "fix-mixed.jpg", // video still, shutters resting half-open. Cell 6
+    // is an open window whose tab sits a little proud — it covers a quarter of
+    // the plate, exactly what every open shutter does.
+    states: [O,O,M,O,O, O,O,M,O,O, O,M,M,M,O, O,O,M,O,O, O,O,M,O,O] },
   { name: "fix-all.jpg", // every shutter slid but one
     states: [M,M,M,O,M, M,M,M,M,M, M,M,M,M,M, M,M,M,M,M, M,M,M,M,M] },
   { name: "fix-washed.jpg", // overexposed: the reds go pink
     states: [O,M,M,O,M, O,O,M,M,O, O,O,M,O,O, O,O,O,M,O, O,O,O,O,O] },
 ];
+
+// The photos below are the three card models the school has met so far,
+// cropped to the card the way the viewfinder guide hands it over (and
+// downscaled): woodgrain (taller board, dark-maroon BINGO letters that a
+// red test accepts), and cream Finger-Tip with its footer. Every one is
+// fully open or fully slid. Their digits were harvested into templates.json,
+// so the read tests below are REGRESSION pins, not a generalisation measure —
+// that was leave-one-physical-card-out over 16 photos of 6 cards: 351/384
+// reads confident-and-correct, 1 confident-and-wrong (a shutter caught
+// mid-slide).
+const NEW_FIXTURES: { name: string; state: CellState; numbers: number[] }[] = [
+  // prettier-ignore
+  { name: "new-wood-open.jpg", state: O, numbers: [14,27,37,56,72, 11,26,40,52,74, 8,19,0,58,64, 6,30,42,57,71, 15,29,38,60,73] },
+  // prettier-ignore
+  { name: "new-wood-covered.jpg", state: M, numbers: [5,23,34,54,61, 15,25,33,48,62, 2,18,0,59,73, 10,20,44,46,72, 12,29,32,49,68] },
+  // prettier-ignore
+  { name: "new-wood-b-open.jpg", state: O, numbers: [5,23,34,54,61, 15,25,33,48,62, 2,18,0,59,73, 10,20,44,46,72, 12,29,32,49,68] },
+  // prettier-ignore
+  { name: "new-cream-a-open.jpg", state: O, numbers: [7,18,33,49,63, 13,19,34,60,70, 10,21,0,59,65, 6,25,31,48,68, 14,23,32,51,71] },
+  // prettier-ignore
+  { name: "new-cream-b-covered.jpg", state: M, numbers: [14,24,31,60,69, 1,27,37,49,65, 13,22,0,56,75, 10,16,33,59,62, 11,23,34,48,71] },
+  // prettier-ignore
+  { name: "new-cream-c-open.jpg", state: O, numbers: [4,20,39,54,69, 10,29,40,51,71, 2,18,0,48,70, 12,19,38,49,63, 1,30,32,50,66] },
+  // prettier-ignore
+  { name: "new-cream-d-open.jpg", state: O, numbers: [14,22,31,47,70, 11,27,38,58,61, 9,20,0,56,75, 4,19,37,59,67, 12,28,36,57,68] },
+];
+
+describe("new card models (woodgrain + cream variants)", () => {
+  for (const f of NEW_FIXTURES) {
+    it(`finds the grid and every shutter state of ${f.name}`, () => {
+      const scan = scanCard(fixture(f.name));
+      // Open cards used to score 0.25 here (plates brighter than the board
+      // earned no credit), so the live viewfinder never accepted them.
+      expect(scan.gridQuality).toBeGreaterThanOrEqual(0.6);
+      expect(scan.cells.map((c) => c.state)).toEqual(Array(25).fill(f.state));
+    });
+    it(`reads the numbers of ${f.name} with no wrong-but-confident cell`, () => {
+      const img = fixture(f.name);
+      const scan = scanCard(img);
+      let right = 0, wrongConfident = 0, tried = 0;
+      for (const cell of scan.cells) {
+        const i = cell.row * 5 + cell.col;
+        if (i === 12) continue;
+        const read = readCell(img, cell.cx, cell.cy, scan.winW, scan.winH, cell.state === "marked" ? "red" : "open", cell.col);
+        tried++;
+        if (read?.value === f.numbers[i]) right++;
+        else if (read?.confident) wrongConfident++;
+      }
+      expect(right / tried).toBeGreaterThanOrEqual(0.9);
+      expect(wrongConfident).toBe(0);
+    });
+  }
+
+  it("never accepts a frame with no card in it", () => {
+    // A red-heavy, card-free scene must fail the alignment gate, not hallucinate a grid.
+    const w = 400, h = 400;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i++) { data[i * 4] = 200; data[i * 4 + 1] = 40; data[i * 4 + 2] = 30; data[i * 4 + 3] = 255; }
+    expect(scanCard({ data, width: w, height: h }).gridQuality).toBeLessThan(MIN_GRID_QUALITY);
+    for (let i = 0; i < w * h; i++) { data[i * 4] = 90; data[i * 4 + 1] = 90; data[i * 4 + 2] = 90; }
+    expect(scanCard({ data, width: w, height: h }).gridQuality).toBeLessThan(MIN_GRID_QUALITY);
+  });
+});
 
 describe("scanCard", () => {
   for (const f of FIXTURES) {
@@ -63,7 +127,7 @@ function readAll(name: string, numbers: number[]) {
     const i = cell.row * 5 + cell.col;
     if (i === 12 || cell.state === "uncertain") continue;
     const mode = cell.state === "marked" ? "red" : "open";
-    const read = readCell(img, cell.cx, cell.cy, WIN_W, WIN_H, mode, cell.col);
+    const read = readCell(img, cell.cx, cell.cy, scan.winW, scan.winH, mode, cell.col);
     if (!read) continue;
     attempted++;
     if (read.value === numbers[i]) correct++;

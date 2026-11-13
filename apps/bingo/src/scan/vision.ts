@@ -2,25 +2,34 @@
 // so the same code runs on a camera frame in the browser and on a fixture
 // image in vitest.
 //
-// The physical object is a Regal "Finger-Tip" shutter card (all cards the
-// school owns are this one model): a tan board with 25 recessed windows, each
-// holding a white number plate and a translucent red shutter. Marked = the
-// shutter slid over the number (the window turns solid red, the number stays
-// legible). Crucially for detection: an OPEN shutter still rests over the
-// LEFT edge of its window (a red dome "tab"), so redness alone doesn't mean
-// marked — redness over the number area (the right of the window) does.
+// The physical object is a Regal "Finger-Tip" shutter card: a board with 25
+// recessed windows, each holding a white number plate and a translucent red
+// shutter. Marked = the shutter slid over the number (the window turns solid
+// red, the number stays legible). An OPEN shutter still rests over the LEFT
+// edge of its window (a red dome "tab"), so redness alone doesn't mean marked
+// — how far the red reaches ACROSS the plate does.
+//
+// The school owns several models: cream boards with a FINGER-TIP header and a
+// footer, and a woodgrain board that is ~10% taller, whose white plates are
+// BRIGHTER than the board (the cream ones read darker) and whose BINGO
+// letters are dark maroon. Nothing here may assume one of them. What every
+// model shares is the bright red of the tabs/shutters and a lattice whose
+// row pitch is ~0.8 of its column pitch.
 //
 // The caller hands us the region the user aligned to the on-screen guide
 // (the card's edges). Within it:
-//   1. a global offset search fits the nominal 5x5 window grid, scoring by
-//      "windowness" (red shutter or recessed-paper pixels — ink gets no
-//      credit, so printed text can't attract the fit),
-//   2. each window is refined locally the same way,
-//   3. each window's number area is classified by its red-pixel fraction,
-//      with an explicit "uncertain" verdict between the bands.
-// Tuned against nine labeled photos (prototype: 100% of cells on every
-// reasonably-aimed shot, failures only under extreme perspective — which the
-// guide alignment UX rules out, and `gridQuality` flags when it happens).
+//   1. the lattice (centre, column pitch, row pitch) is fit by brute force
+//      over summed-area tables of BRIGHT red + window-ish pixels. Ink and
+//      dark-maroon print get no credit, so lettering can't attract the fit
+//      (a one-row-shifted lattice lands on BINGO otherwise);
+//   2. each cell is refined from its own red blob (tab or shutter);
+//   3. each cell's COVERAGE (how much of the plate the shutter reaches) is
+//      classified, with an explicit "uncertain" verdict between the bands for
+//      a shutter caught mid-slide;
+//   4. `gridQuality` is tab/shutter evidence per cell, gutter-checked so a
+//      red wall can't pass for a card.
+// Tuned against 20 labeled photos of 7 cards (the old fits' perspective flex
+// is gone: per-cell refinement absorbs the tilt a hand-held guide allows).
 
 export interface Rgba {
   data: Uint8ClampedArray;
@@ -44,18 +53,17 @@ export interface CellResult {
 
 export interface CardScan {
   cells: CellResult[];
-  /** Mean windowness over all 25 cells — gate on this before trusting states. */
+  /** Mean tab/shutter evidence over all 25 cells, 0..1 — gate on this before trusting states. */
   gridQuality: number;
   uncertain: number;
+  /** Fitted window size, fractions of the analyzed region (the lattice pitch
+   *  differs per card model, so readers take this, not a constant). */
+  winW: number;
+  winH: number;
 }
 
-// Nominal window-center grid as fractions of the card's bounding box, and the
-// window size as a fraction of card width/height. Measured on a flat product
-// photo; the searches below absorb per-shot error.
-const COLS = [0.128, 0.322, 0.512, 0.703, 0.898] as const;
-const ROWS = [0.233, 0.371, 0.511, 0.651, 0.791] as const;
-export const WIN_W = 0.085;
-export const WIN_H = 0.078;
+// The lattice is searched, not assumed (see scanCard): card models differ in
+// height and a hand-held guide never frames two shots alike.
 
 /** Accept a scan when the grid fit is at least this window-like. */
 export const MIN_GRID_QUALITY = 0.45;
@@ -127,168 +135,233 @@ function computePlanes(img: Rgba): Planes {
     const [hh, ss, vv] = toHsv(data[i * 4] ?? 0, data[i * 4 + 1] ?? 0, data[i * 4 + 2] ?? 0);
     hue[i] = hh; sat[i] = ss; val[i] = vv;
   }
-  // Board brightness reference: median value over probe points between
-  // windows (never red there; glare and shadow average out via the median).
+  // Board brightness reference: median value over every non-red pixel. The
+  // card fills the guide and the board is most of it, so the median is the
+  // board whatever the model's layout (plates, ink and glare are minorities).
   const vs: number[] = [];
-  const probe = (fx: number, fy: number) => {
-    const cx = Math.round(fx * w), cy = Math.round(fy * h);
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
-        const x = cx + dx, y = cy + dy;
-        if (x < 0 || y < 0 || x >= w || y >= h) continue;
-        const i = y * w + x;
-        if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) vs.push(val[i] ?? 0);
-      }
-    }
-  };
-  for (let r = 0; r < 5; r++) {
-    for (let c = 0; c < 4; c++) probe(((COLS[c] ?? 0) + (COLS[c + 1] ?? 0)) / 2, ROWS[r] ?? 0);
-  }
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 5; c++) probe(COLS[c] ?? 0, ((ROWS[r] ?? 0) + (ROWS[r + 1] ?? 0)) / 2);
+  for (let i = 0; i < n; i += 3) {
+    if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) vs.push(val[i] ?? 0);
   }
   vs.sort((a, b) => a - b);
   const vBoard = vs[(vs.length / 2) | 0] ?? 0.8;
   return { w, h, hue, sat, val, vBoard };
 }
 
-/** Red fraction in the tab zone at the window's left edge. The tab dome
- *  shows red on OPEN windows and the shutter covers this zone when closed —
- *  every true window has red here and nothing else on the card does, which
- *  keeps the grid fit off the BINGO letters (they blur into window-like
- *  mid-gray at analysis resolution). */
-function tabRed(p: Planes, cx: number, cy: number): number {
-  const hw = (WIN_W * p.w) / 2, hh = (WIN_H * p.h) / 2;
-  let n = 0, red = 0;
-  for (let y = Math.round(cy - hh * 0.7); y <= cy + hh * 0.7; y += 2) {
-    for (let x = Math.round(cx - hw * 1.24); x <= cx - hw * 0.5; x += 2) {
-      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
-      const i = y * p.w + x;
-      n++;
-      if (isRed(p.hue[i] ?? 0, p.sat[i] ?? 0, p.val[i] ?? 0)) red++;
-    }
-  }
-  return n ? red / n : 0;
-}
+/** Looser red for the coverage bands: they sit inside the window, where the
+ *  only candidates are white plate and shutter, so an overexposed pink shutter
+ *  (S ~0.25) can be accepted without the wood-grain risk the global test has. */
+const isCoverRed = (h: number, s: number, v: number): boolean =>
+  s > 0.22 && v > 0.35 && (h < 22 || h > 335);
 
-/** Grid-fit score: window content plus the tab anchor. Used for the global
- *  and tilt searches only — per-cell refinement uses plain windowness,
- *  because the tab term pulls a single cell's center rightward. */
-function cellScore(p: Planes, cx: number, cy: number): number {
-  return windowness(p, cx, cy) + tabRed(p, cx, cy);
-}
-
-/** Fraction of the window rect at (cx, cy) that looks like window content:
- *  red shutter, or recessed paper clearly darker than the board but not
- *  ink-black. Ink scoring zero is what keeps the fit off printed text. */
-function windowness(p: Planes, cx: number, cy: number): number {
-  const hw = (WIN_W * p.w) / 2, hh = (WIN_H * p.h) / 2;
-  let n = 0, hit = 0;
-  for (let y = Math.round(cy - hh); y <= cy + hh; y += 2) {
-    for (let x = Math.round(cx - hw); x <= cx + hw; x += 2) {
-      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
-      const i = y * p.w + x;
-      const h = p.hue[i] ?? 0, s = p.sat[i] ?? 0, v = p.val[i] ?? 0;
-      n++;
-      if (isRed(h, s, v) || (s < 0.3 && p.vBoard - v > 0.12 && v > 0.28)) hit++;
+/** How much of the plate the shutter covers, 0..1 (stored as `redFrac`).
+ *  Sampled in two thin bands near the window's top and bottom edges — digits
+ *  never reach them, so ink can't pose as a gap in the red — at eight columns
+ *  across the plate. An open shutter shows only its tab (~a quarter of the
+ *  plate); a slid one covers it all; anything between is a shutter caught
+ *  mid-slide, which is "uncertain" and never counted as marked. `cx` is the
+ *  PLATE centre; ww/wh are the fitted window size in analysis pixels. */
+function classify(p: Planes, cx: number, cy: number, ww: number, wh: number): { redFrac: number; state: CellState } {
+  const plateW = ww * 0.8;
+  const left = cx - plateW / 2;
+  let covered = 0, cols = 0;
+  for (let k = 0; k < 8; k++) {
+    const x = Math.round(left + ((k + 0.5) / 8) * plateW);
+    if (x < 0 || x >= p.w) continue;
+    cols++;
+    let n = 0, red = 0;
+    for (const side of [-1, 1]) {
+      for (let f = 0.3; f <= 0.42; f += 0.04) {
+        const y = Math.round(cy + side * f * wh);
+        if (y < 0 || y >= p.h) continue;
+        const i = y * p.w + x;
+        n++;
+        if (isCoverRed(p.hue[i] ?? 0, p.sat[i] ?? 0, p.val[i] ?? 0)) red++;
+      }
     }
+    if (n && red / n >= 0.6) covered++;
   }
-  return n ? hit / n : 0;
-}
-
-/** Red fraction over the number area — the right of the window, past where
- *  an open shutter rests. Fully slid = ~1, open = ~0 even with the tab. */
-function classify(p: Planes, cx: number, cy: number): { redFrac: number; state: CellState } {
-  const hw = (WIN_W * p.w) / 2, hh = (WIN_H * p.h) / 2;
-  const x0 = Math.round(cx - hw + 2 * hw * 0.42), x1 = Math.round(cx + hw * 0.95);
-  const y0 = Math.round(cy - hh * 0.7), y1 = Math.round(cy + hh * 0.7);
-  let n = 0, red = 0;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
-      const i = y * p.w + x;
-      n++;
-      if (isRed(p.hue[i] ?? 0, p.sat[i] ?? 0, p.val[i] ?? 0)) red++;
-    }
-  }
-  const redFrac = n ? red / n : 0;
-  const state: CellState = redFrac > 0.45 ? "marked" : redFrac < 0.25 ? "open" : "uncertain";
+  const redFrac = cols ? covered / cols : 0;
+  const state: CellState = redFrac >= 0.7 ? "marked" : redFrac <= 0.4 ? "open" : "uncertain";
   return { redFrac, state };
 }
 
+/** Summed-area table over a 0/1 mask: any rectangle's count in four reads. */
+class Integral {
+  private t: Uint32Array;
+  constructor(private w: number, private h: number, mask: Uint8Array) {
+    this.t = new Uint32Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let run = 0;
+      for (let x = 0; x < w; x++) {
+        run += mask[y * w + x] ?? 0;
+        this.t[(y + 1) * (w + 1) + x + 1] = (this.t[y * (w + 1) + x + 1] ?? 0) + run;
+      }
+    }
+  }
+  /** Count over [x0,x1) x [y0,y1), clamped to the image (outside counts 0). */
+  sum(x0: number, y0: number, x1: number, y1: number): number {
+    const a = Math.max(0, Math.round(x0)), b = Math.max(0, Math.round(y0));
+    const c = Math.min(this.w, Math.round(x1)), d = Math.min(this.h, Math.round(y1));
+    if (c <= a || d <= b) return 0;
+    const W = this.w + 1;
+    return (this.t[d * W + c] ?? 0) - (this.t[b * W + c] ?? 0) - (this.t[d * W + a] ?? 0) + (this.t[b * W + a] ?? 0);
+  }
+}
+
+/** Window size as a fraction of the lattice pitch (measured: shutters are
+ *  ~0.44 of the column pitch and ~0.52 of the row pitch on every model). */
+const WIN_OF_PITCH_X = 0.44;
+const WIN_OF_PITCH_Y = 0.55;
+
+/** Where a window's PLATE centre sits relative to its red blob. The blob
+ *  includes the tab dome, which bulges out of the plate's left edge, so the
+ *  plate is ~0.8 of the blob's width: a covered window's centre is that far in
+ *  from the blob's right edge; an open window shows only the tab, and the
+ *  centre is that far in from the tab's left edge. Fit against labeled
+ *  photos of three card models (digits are read around this point, and a
+ *  crop shifted a fifth of a window loses the digit beside the edge). */
+const COVERED_RIGHT_INSET = 0.38;
+const OPEN_LEFT_INSET = 0.6;
+
+interface Lattice {
+  /** Grid centre, analysis pixels. */
+  x0: number;
+  y0: number;
+  /** Row/column pitch, analysis pixels. */
+  px: number;
+  py: number;
+}
+
+const latX = (l: Lattice, c: number): number => l.x0 + (c - 2) * l.px;
+const latY = (l: Lattice, r: number): number => l.y0 + (r - 2) * l.py;
+
 /** Analyze a guide-aligned card region. The input should contain the card
- *  roughly filling the frame (the guide contract); downscaling happens here. */
+ *  roughly filling the frame (the guide contract); downscaling happens here.
+ *
+ *  The lattice is fit by brute force over (centre, column pitch, row/column
+ *  pitch ratio) using summed-area tables, so the search can be wide — card
+ *  models differ in height (a woodgrain board is ~10% taller than the cream
+ *  Finger-Tip one) and a hand-held guide never frames them identically. */
 export function scanCard(region: Rgba): CardScan {
   const img = downscale(region, ANALYSIS_WIDTH);
   const p = computePlanes(img);
+  const { w, h } = p;
 
-  // Global offset: the whole grid slides together. The vertical range is
-  // wide because the header above the grid varies by batch, and a narrow
-  // range lets the fit alias onto a one-row-shifted lattice (20 of 25
-  // windows still align there). The tabRed term in cellScore is what breaks
-  // that tie in favor of the true fit.
-  let bestDx = 0, bestDy = 0, bestScore = -1;
-  for (let dy = -0.1; dy <= 0.101; dy += 0.01) {
-    for (let dx = -0.06; dx <= 0.061; dx += 0.01) {
-      let score = 0;
-      for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 5; c++) {
-          score += cellScore(p, ((COLS[c] ?? 0) + dx) * p.w, ((ROWS[r] ?? 0) + dy) * p.h);
+  const red = new Uint8Array(w * h), win = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const hh = p.hue[i] ?? 0, ss = p.sat[i] ?? 0, vv = p.val[i] ?? 0;
+    // Anchors need a BRIGHT red: the woodgrain model prints its BINGO letters
+    // and logo in dark maroon (V ~0.25-0.3), which the plain red test accepts
+    // and which a one-row-shifted lattice happily locks onto. Tabs and
+    // shutters read V >= 0.5 even in dim frames.
+    const r = isRed(hh, ss, vv) && vv > 0.4;
+    if (r) red[i] = 1;
+    if (r || (ss < 0.3 && p.vBoard - vv > 0.12 && vv > 0.28)) win[i] = 1;
+  }
+  const redI = new Integral(w, h, red), winI = new Integral(w, h, win);
+
+  const cellFit = (cx: number, cy: number, ww: number, wh: number): number => {
+    const hw = ww / 2, hh = wh / 2;
+    const tabA = (hw * 0.74) * (hh * 1.4);
+    const tab = redI.sum(cx - hw * 1.24, cy - hh * 0.7, cx - hw * 0.5, cy + hh * 0.7) / Math.max(1, tabA);
+    const winA = ww * wh;
+    const wn = winI.sum(cx - hw, cy - hh, cx + hw, cy + hh) / Math.max(1, winA);
+    return wn + tab;
+  };
+  const latticeScore = (l: Lattice): number => {
+    const ww = WIN_OF_PITCH_X * l.px, wh = WIN_OF_PITCH_Y * l.py;
+    let s = 0;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) s += cellFit(latX(l, c), latY(l, r), ww, wh);
+    return s;
+  };
+
+  // Coarse-to-fine over the four lattice parameters.
+  let best: Lattice = { x0: 0.512 * w, y0: 0.5 * h, px: 0.19 * w, py: 0.145 * h };
+  let bestScore = -1;
+  for (let pxF = 0.16; pxF <= 0.2051; pxF += 0.005) {
+    for (let ratio = 0.72; ratio <= 0.8801; ratio += 0.04) {
+      const px = pxF * w, py = px * ratio;
+      for (let y0 = 0.3 * h; y0 <= 0.65 * h; y0 += 0.01 * h) {
+        for (let x0 = 0.42 * w; x0 <= 0.6 * w; x0 += 0.01 * w) {
+          const l: Lattice = { x0, y0, px, py };
+          const sc = latticeScore(l);
+          if (sc > bestScore) { bestScore = sc; best = l; }
         }
       }
-      if (score > bestScore) { bestScore = score; bestDx = dx; bestDy = dy; }
+    }
+  }
+  // Fine pass around the coarse winner.
+  const c0 = best;
+  for (let dpx = -0.006; dpx <= 0.0061; dpx += 0.003) {
+    for (let dpy = -0.006; dpy <= 0.0061; dpy += 0.003) {
+      for (let dy = -0.012; dy <= 0.0121; dy += 0.004) {
+        for (let dx = -0.012; dx <= 0.0121; dx += 0.004) {
+          const l: Lattice = { x0: c0.x0 + dx * w, y0: c0.y0 + dy * h, px: c0.px + dpx * w, py: c0.py + dpy * h };
+          const sc = latticeScore(l);
+          if (sc > bestScore) { bestScore = sc; best = l; }
+        }
+      }
     }
   }
 
-  // Tilt flex: foreshortening stretches the grid linearly, so fit a pitch
-  // slope on each axis (rows and columns stay coupled — an independent
-  // per-row search wanders on small blurry inputs).
-  let vSlope = 0, hSlope = 0;
-  let bs = -1;
-  for (let s = -0.04; s <= 0.041; s += 0.005) {
-    let sum = 0;
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        sum += cellScore(p, ((COLS[c] ?? 0) + bestDx) * p.w, ((ROWS[r] ?? 0) + bestDy + s * (r - 2)) * p.h);
+  const ww = WIN_OF_PITCH_X * best.px, wh = WIN_OF_PITCH_Y * best.py;
+
+  // Per-window refinement from the cell's own red blob (tab or shutter —
+  // both are red, and nothing else on the card is bright red): the vertical
+  // centre is the blob's centroid in either state; horizontally a covered
+  // window's blob spans it, while an open one shows only the left tab, so
+  // there the tab's left edge is placed using the offset the covered/typical
+  // cells show.
+  interface Blob { n: number; minX: number; maxX: number; cy: number }
+  const blobAt = (lx: number, ly: number): Blob | null => {
+    let n = 0, minX = Infinity, maxX = -Infinity, sy = 0;
+    const x0 = Math.max(0, Math.round(lx - ww * 0.8)), x1 = Math.min(w - 1, Math.round(lx + ww * 0.7));
+    const y0 = Math.max(0, Math.round(ly - wh * 0.9)), y1 = Math.min(h - 1, Math.round(ly + wh * 0.9));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (!red[y * w + x]) continue;
+        n++; sy += y;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
       }
     }
-    if (sum > bs) { bs = sum; vSlope = s; }
-  }
-  bs = -1;
-  for (let s = -0.04; s <= 0.041; s += 0.005) {
-    let sum = 0;
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        sum += cellScore(
-          p,
-          ((COLS[c] ?? 0) + bestDx + s * (c - 2)) * p.w,
-          ((ROWS[r] ?? 0) + bestDy + vSlope * (r - 2)) * p.h,
-        );
-      }
-    }
-    if (sum > bs) { bs = sum; hSlope = s; }
+    return n >= 6 ? { n, minX, maxX, cy: sy / n } : null;
+  };
+  const blobs: (Blob | null)[] = [];
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) blobs.push(blobAt(latX(best, c), latY(best, r)));
   }
 
-  // Per-window refinement (plain windowness — see cellScore), then classify.
   const cells: CellResult[] = [];
   let qualitySum = 0, uncertain = 0;
   for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 5; c++) {
-      let cx = 0, cy = 0, quality = -1;
-      for (let fy = -0.022; fy <= 0.023; fy += 0.0055) {
-        for (let fx = -0.022; fx <= 0.023; fx += 0.0055) {
-          const px = ((COLS[c] ?? 0) + bestDx + hSlope * (c - 2) + fx) * p.w;
-          const py = ((ROWS[r] ?? 0) + bestDy + vSlope * (r - 2) + fy) * p.h;
-          const score = windowness(p, px, py);
-          if (score > quality) { quality = score; cx = px; cy = py; }
-        }
+      const lx = latX(best, c), ly = latY(best, r);
+      const b = blobs[r * 5 + c] ?? null;
+      let cx = lx, cy = ly;
+      if (b) {
+        // Clamp: a refinement may nudge the lattice, never relocate a cell.
+        const wide = b.maxX - b.minX >= ww * 0.75;
+        // A covered window's blob includes the tab dome on its left, so its
+        // midpoint sits left of the window's: anchor on the right edge.
+        const bx = wide ? b.maxX - ww * COVERED_RIGHT_INSET : b.minX + ww * OPEN_LEFT_INSET;
+        cx = Math.min(lx + ww * 0.3, Math.max(lx - ww * 0.3, bx));
+        cy = Math.min(ly + wh * 0.3, Math.max(ly - wh * 0.3, b.cy));
       }
-      const { redFrac, state } = classify(p, cx, cy);
+      // Quality: red in the tab zone (present on every real window, open or
+      // covered) and NOT in the gutter between columns — a red shirt fills
+      // both, a card only the first.
+      const hw = ww / 2, hh = wh / 2;
+      const tabA = hw * 0.74 * hh * 1.4;
+      const tab = redI.sum(cx - hw * 1.24, cy - hh * 0.7, cx - hw * 0.5, cy + hh * 0.7) / Math.max(1, tabA);
+      const gx = cx + best.px * 0.5;
+      const gap = redI.sum(gx - best.px * 0.1, cy - hh, gx + best.px * 0.1, cy + hh) / Math.max(1, best.px * 0.2 * wh);
+      const quality = Math.min(1, tab / 0.5) * (gap < 0.3 ? 1 : 0);
+      const { redFrac, state } = classify(p, cx, cy, ww, wh);
       if (state === "uncertain") uncertain++;
       qualitySum += quality;
       cells.push({ row: r, col: c, cx: cx / p.w, cy: cy / p.h, redFrac, state, quality });
     }
   }
-
-  return { cells, gridQuality: qualitySum / 25, uncertain };
+  return { cells, gridQuality: qualitySum / 25, uncertain, winW: ww / w, winH: wh / h };
 }

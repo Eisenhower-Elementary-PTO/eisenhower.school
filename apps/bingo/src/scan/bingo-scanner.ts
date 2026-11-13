@@ -13,7 +13,7 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, state, query } from "lit/decorators.js";
 import { api } from "../lib/api.js";
 import { t } from "../lib/i18n.js";
-import { scanCard, WIN_W, WIN_H, MIN_GRID_QUALITY, type CardScan, type Rgba } from "./vision.js";
+import { scanCard, MIN_GRID_QUALITY, type CardScan, type Rgba } from "./vision.js";
 import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
 import { checkCard, type CheckResult } from "./check.js";
@@ -219,8 +219,8 @@ export class BingoScanner extends LitElement {
         region,
         cell.cx,
         cell.cy,
-        WIN_W,
-        WIN_H,
+        scan.winW,
+        scan.winH,
         cell.redFrac > 0.35 ? "red" : "open",
         cell.col,
       );

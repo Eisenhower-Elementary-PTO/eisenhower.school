@@ -33,27 +33,33 @@ export interface CellReading {
 const CONFIDENT_SCORE = 2.2;
 const CONFIDENT_MARGIN = 0.35;
 
+/** Added to single-digit candidates in column B when a two-digit reading exists. */
+const SINGLE_DIGIT_PENALTY = 1.0;
+
 const TW: number = templatesJson.w;
 const TH: number = templatesJson.h;
 
-interface Template {
+export interface Template {
   label: string;
   q: Uint8Array;
 }
 
 let templates: Template[] | null = null;
 
-function library(): Template[] {
+/** Unpack a templates.json sample (two 4-bit cells per byte). */
+export function unpackTemplate(s: { d: string; b: string }): Template {
+  const bytes = Uint8Array.from(atob(s.b), (ch) => ch.charCodeAt(0));
+  const q = new Uint8Array(TW * TH);
+  for (let i = 0; i < q.length; i++) {
+    const byte = bytes[i >> 1] ?? 0;
+    q[i] = i & 1 ? byte >> 4 : byte & 0x0f;
+  }
+  return { label: s.d, q };
+}
+
+export function library(): Template[] {
   if (templates) return templates;
-  templates = templatesJson.samples.map((s) => {
-    const bytes = Uint8Array.from(atob(s.b), (ch) => ch.charCodeAt(0));
-    const q = new Uint8Array(TW * TH);
-    for (let i = 0; i < q.length; i++) {
-      const byte = bytes[i >> 1] ?? 0;
-      q[i] = i & 1 ? byte >> 4 : byte & 0x0f;
-    }
-    return { label: s.d, q };
-  });
+  templates = templatesJson.samples.map(unpackTemplate);
   return templates;
 }
 
@@ -203,6 +209,19 @@ function trySegment(
     }
   }
   if (digits.length === 0) return null;
+  // A lone digit with real ink beside it that segmentation refused (a digit
+  // half over a shutter's edge, glare across it) is an INCOMPLETE reading, not
+  // a one-digit number: "15" with its 5 lost decodes as a perfect "1".
+  if (digits.length === 1) {
+    const only = digits[0];
+    if (only) {
+      for (const c of comps) {
+        if (c === only || c.minX <= only.maxX || c.h < H * 0.1 || c.n < 20) continue;
+        if (c.maxX >= W - 1 && c.w < W * 0.04) continue; // the plate's own edge, not a digit
+        return null;
+      }
+    }
+  }
   digits.sort((a, b) => a.minX - b.minX);
   if (digits.length > 2) {
     // Pick the best aligned adjacent pair (taller crops can catch strays).
@@ -313,9 +332,9 @@ export function segmentCell(
 /** Distance from one digit bitmap to each digit class 0-9 (best template
  *  per class). Computed once per bitmap, then shared across the up to 15
  *  candidate values that reference it. */
-function distByClass(q: Uint8Array): Float64Array {
+function distByClass(q: Uint8Array, lib: Template[]): Float64Array {
   const out = new Float64Array(10).fill(Infinity);
-  for (const tpl of library()) {
+  for (const tpl of lib) {
     const cls = tpl.label.charCodeAt(0) - 48;
     if (cls < 0 || cls > 9) continue;
     let d = 0;
@@ -327,11 +346,15 @@ function distByClass(q: Uint8Array): Float64Array {
 }
 
 /** Decode all segmentation variants against the column's 15 legal values. */
-export function decodeCell(variants: Uint8Array[][] | null, col: number): CellReading | null {
+export function decodeCell(
+  variants: Uint8Array[][] | null,
+  col: number,
+  lib: Template[] = library(),
+): CellReading | null {
   if (!variants || variants.length === 0) return null;
   const byValue = new Map<number, number>();
   for (const bmps of variants) {
-    const dists = bmps.map((b) => distByClass(b));
+    const dists = bmps.map((b) => distByClass(b, lib));
     for (let v = col * 15 + 1; v <= col * 15 + 15; v++) {
       const s = String(v);
       if (s.length !== bmps.length) continue;
@@ -343,6 +366,16 @@ export function decodeCell(variants: Uint8Array[][] | null, col: number): CellRe
     }
   }
   if (byValue.size === 0) return null;
+  // Column B alone holds single-digit numbers, and there a lone "1" is the
+  // classic false read: at some thresholds the second digit of 13/14/15 fades
+  // into the shutter and the "1" survives on its own, matching its template
+  // very well. When ANY variant segmented two digits, the number is
+  // two-digit; a genuine single digit essentially never splits in two.
+  if (col === 0) {
+    let twoDigit = false;
+    for (const v of byValue.keys()) if (v >= 10) twoDigit = true;
+    if (twoDigit) for (const [v, sc] of byValue) if (v < 10) byValue.set(v, sc + SINGLE_DIGIT_PENALTY);
+  }
   const sorted = [...byValue.entries()].sort((a, b) => a[1] - b[1]);
   const top = sorted[0];
   if (!top || !Number.isFinite(top[1])) return null;
