@@ -209,20 +209,24 @@ export const scannerStyles = css`
 
   /* ── the read grid ── */
 
+  /* The grid takes whatever height the camera and status leave (main is a
+     flex column filling the screen), so the rows stretch instead of leaving
+     blank space under a tall phone. The row floor keeps cells legible, and a
+     very short screen scrolls rather than crushing them. */
   .grid {
+    flex: 1;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, minmax(2.2em, 1fr));
     gap: 0.3em;
   }
 
-  /* Wider than tall: five square rows were as tall as the camera view and
-     pushed the bottom row off the screen. */
   .grid .cell {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    aspect-ratio: 1.6;
+    min-height: 0;
     border-radius: 0.5em;
     font: inherit;
     font-weight: 700;
@@ -269,16 +273,18 @@ export const scannerStyles = css`
     color: inherit;
   }
 
-  /* Short phones (SE-class, or a browser with chrome showing): flatten the
-     cells further so the last row is still on screen. */
+  /* Short phones (SE-class, or a browser with chrome showing): tighten the
+     page so the grid's share of the height stays usable. */
   @media (max-height: 740px) {
     main {
       gap: 0.4em;
       padding-top: calc(0.5em + env(safe-area-inset-top, 0px));
       padding-bottom: calc(0.5em + env(safe-area-inset-bottom, 0px));
     }
+    .grid {
+      grid-template-rows: repeat(5, minmax(1.9em, 1fr));
+    }
     .grid .cell {
-      aspect-ratio: 2.2;
       font-size: 0.95em;
     }
   }
