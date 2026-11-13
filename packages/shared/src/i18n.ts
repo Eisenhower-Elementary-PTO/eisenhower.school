@@ -1009,8 +1009,6 @@ export interface Strings {
   bingoScanReading: string; // uses {done} {total}
   bingoScanBingo: string;
   bingoScanClean: string;
-  bingoScanFalseMarks: string; // uses {nums}
-  bingoScanMissed: string; // uses {nums}
   bingoScanCamera: string;
   bingoScanPhoto: string;
   bingoScanFixHint: string;
@@ -1931,10 +1929,8 @@ const en: Strings = {
   bingoScanTitle: "Card check",
   bingoScanAlign: "Fit the card inside the frame and hold the phone flat",
   bingoScanReading: "Reading the card — hold steady ({done}/{total})",
-  bingoScanBingo: "BINGO — this card wins!",
-  bingoScanClean: "Every covered square was called. No bingo yet.",
-  bingoScanFalseMarks: "Covered but never called: {nums}",
-  bingoScanMissed: "Called but not covered: {nums}",
+  bingoScanBingo: "BINGO — this card's numbers win!",
+  bingoScanClean: "No bingo — this card's numbers don't make a line.",
   bingoScanCamera: "Camera unavailable — allow camera access and try again.",
   bingoScanPhoto: "Check from a photo",
   bingoScanFixHint: "Tap a square to fix a misread number.",
@@ -2800,9 +2796,7 @@ const es: Strings = {
   bingoScanAlign: "Encuadra el cartón dentro del marco y mantén el teléfono plano",
   bingoScanReading: "Leyendo el cartón — mantén firme la cámara ({done}/{total})",
   bingoScanBingo: "¡BINGO! Este cartón gana.",
-  bingoScanClean: "Todas las casillas cubiertas fueron cantadas. Aún no hay bingo.",
-  bingoScanFalseMarks: "Cubiertas pero no cantadas: {nums}",
-  bingoScanMissed: "Cantadas pero sin cubrir: {nums}",
+  bingoScanClean: "Sin bingo: los números de este cartón no forman línea.",
   bingoScanCamera: "Cámara no disponible — permite el acceso a la cámara e inténtalo de nuevo.",
   bingoScanPhoto: "Revisar desde una foto",
   bingoScanFixHint: "Toca una casilla para corregir un número mal leído.",
@@ -3630,9 +3624,7 @@ const zh: Strings = {
   bingoScanAlign: "让卡片对齐框内，手机保持水平",
   bingoScanReading: "正在读取卡片 — 请拿稳（{done}/{total}）",
   bingoScanBingo: "BINGO！这张卡赢了。",
-  bingoScanClean: "盖住的数字都已叫到。还没有宾果。",
-  bingoScanFalseMarks: "已盖住但未叫到：{nums}",
-  bingoScanMissed: "已叫到但未盖住：{nums}",
+  bingoScanClean: "没有宾果 — 这张卡的数字连不成一条线。",
   bingoScanCamera: "无法使用相机 — 请允许相机权限后重试。",
   bingoScanPhoto: "用照片核对",
   bingoScanFixHint: "点按格子可更正读错的数字。",
@@ -4556,9 +4548,7 @@ const so: Strings = {
   bingoScanAlign: "Kaarka geli gudaha sanduuqa, telefoonkana siman u hay",
   bingoScanReading: "Kaarka waa la akhrinayaa — xasili kamerada ({done}/{total})",
   bingoScanBingo: "BINGO — kaarkan waa guuleystay!",
-  bingoScanClean: "Dhammaan meelaha la daboolay waa la yeeray. Weli bingo ma jiro.",
-  bingoScanFalseMarks: "La daboolay laakiin aan la yeerin: {nums}",
-  bingoScanMissed: "La yeeray laakiin aan la daboolin: {nums}",
+  bingoScanClean: "Bingo ma jiro — tirooyinka kaarkan xariiq ma sameeyaan.",
   bingoScanCamera: "Kamerada lama heli karo — ogolow kamerada kadibna isku day mar kale.",
   bingoScanPhoto: "Ka hubi sawir",
   bingoScanFixHint: "Taabo sanduuq si aad u saxdo lambar si khaldan loo akhriyay.",

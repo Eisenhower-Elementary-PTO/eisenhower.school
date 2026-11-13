@@ -105,8 +105,10 @@ describe("CardFusion", () => {
     expect(f.needsReading(3)).toBe(true);
     f.addReading(3, { value: 57, score: 1.5, margin: 0.5, confident: true });
     expect(f.numberAt(3)).toEqual({ value: 57, settled: false });
+    expect(f.settledNumbers()[3]).toBeNull(); // a guess never reaches the referee
     f.addReading(3, { value: 57, score: 1.4, margin: 0.6, confident: true });
     expect(f.numberAt(3)).toEqual({ value: 57, settled: true });
+    expect(f.settledNumbers()[3]).toBe(57);
     expect(f.needsReading(3)).toBe(false);
     f.pin(3, 59);
     expect(f.numberAt(3)).toEqual({ value: 59, settled: true });
@@ -119,56 +121,36 @@ describe("CardFusion", () => {
     f.addReading(7, { value: 33, score: 0.4, margin: 1.2, confident: true });
     expect(f.numberAt(7).settled).toBe(true);
   });
-
-  it("reports the majority shutter state of recent frames", () => {
-    const f = new CardFusion();
-    f.addState(4, "marked");
-    f.addState(4, "open");
-    f.addState(4, "open");
-    expect(f.stateAt(4)).toBe("open");
-  });
 });
 
-describe("checkCard", () => {
-  it("confirms a clean card and flags a false mark", () => {
-    const clean = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19, 47]);
-    expect(clean.readable).toBe(true);
-    expect(clean.falseMarks).toEqual([]);
-    expect(clean.lines).toEqual([]);
-    const dirty = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19]);
-    expect(dirty.falseMarks).toEqual([47]);
-  });
-
-  it("withholds the verdict while a covered number is unknown", () => {
-    const numbers: (number | null)[] = [...OPEN_NUMBERS];
-    numbers[1] = null; // covered cell (24) not read yet
-    const res = checkCard(numbers, [...OPEN_STATES], [73, 19, 47]);
-    expect(res.readable).toBe(false);
-    expect(res.verdicts[1]).toBe("uncertain");
-    // An unknown OPEN cell does not block the verdict.
-    const numbers2: (number | null)[] = [...OPEN_NUMBERS];
-    numbers2[2] = null; // open cell
-    expect(checkCard(numbers2, [...OPEN_STATES], [24, 73, 19, 47]).readable).toBe(true);
+describe("checkCard (shutters ignored: do the numbers make a line?)", () => {
+  it("says no bingo once every line holds a known uncalled number", () => {
+    const res = checkCard(OPEN_NUMBERS, [24, 73, 19, 47]);
+    expect(res.lines).toEqual([]);
+    expect(res.readable).toBe(true);
   });
 
   it("sees a bingo, including through the FREE square", () => {
-    const s = [...OPEN_STATES];
-    s[6] = "marked";
-    s[11] = "marked";
-    s[21] = "marked";
-    const res = checkCard(OPEN_NUMBERS, s, [24, 17, 27, 19, 26, 73, 47]);
-    expect(res.lines).toContainEqual([1, 6, 11, 16, 21]);
-    const d = [...OPEN_STATES];
-    d[0] = "marked";
-    d[6] = "marked";
-    d[18] = "marked";
-    d[24] = "marked";
-    const diag = checkCard(OPEN_NUMBERS, d, [7, 17, 59, 66, 24, 73, 19, 47]);
+    // Column 2 of fix-open: 24, 17, 27, 19, 26 (rows 0-4 of col 1).
+    const col = checkCard(OPEN_NUMBERS, [24, 17, 27, 19, 26]);
+    expect(col.lines).toContainEqual([1, 6, 11, 16, 21]);
+    const diag = checkCard(OPEN_NUMBERS, [7, 17, 59, 66]);
     expect(diag.lines).toContainEqual([0, 6, 12, 18, 24]);
   });
 
-  it("reports called-but-uncovered numbers", () => {
-    const res = checkCard(OPEN_NUMBERS, [...OPEN_STATES], [24, 73, 19, 47, 14, 42]);
-    expect(res.missed.sort((a, b) => a - b)).toEqual([14, 42]);
+  it("waits while an unread square could still complete a line", () => {
+    const numbers: (number | null)[] = [...OPEN_NUMBERS];
+    for (const i of [1, 6, 11, 16, 21]) numbers[i] = null; // column 1 unread: could still be a line
+    const res = checkCard(numbers, [73]);
+    expect(res.readable).toBe(false);
+    expect(res.verdicts[1]).toBe("uncertain");
+  });
+
+  it("calls a win even while other squares are unread", () => {
+    const numbers: (number | null)[] = [...OPEN_NUMBERS];
+    numbers[0] = null; // unrelated to column 1
+    const res = checkCard(numbers, [24, 17, 27, 19, 26]);
+    expect(res.lines).toContainEqual([1, 6, 11, 16, 21]);
+    expect(res.readable).toBe(true);
   });
 });
