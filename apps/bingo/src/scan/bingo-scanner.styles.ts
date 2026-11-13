@@ -70,6 +70,7 @@ export const scannerStyles = css`
   }
 
   main {
+    cursor: pointer;
     flex: 1;
     display: flex;
     flex-direction: column;

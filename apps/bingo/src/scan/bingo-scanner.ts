@@ -236,6 +236,14 @@ export class BingoScanner extends LitElement {
     this.result = checkCard(this.fusion.settledNumbers(), this.called);
   }
 
+  /** A tap anywhere rescans the card — except on a number square, where a
+   *  tap opens the correction field (wiping the card would lose the fix). */
+  private onTapAnywhere = (e: Event): void => {
+    if (this.editing !== null) return;
+    if (e.composedPath().some((el) => el instanceof HTMLElement && el.classList.contains("cell"))) return;
+    this.nextCard();
+  };
+
   private nextCard(): void {
     this.fusion.reset();
     this.editing = null;
@@ -258,7 +266,7 @@ export class BingoScanner extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <main class="scanview">
+      <main class="scanview" @click=${this.onTapAnywhere}>
         ${this.renderViewfinder()}
         <div class="statusrow">
           <div class="statuscol">${this.renderBanner()}</div>
