@@ -1010,7 +1010,6 @@ export interface Strings {
   bingoScanBingo: string;
   bingoScanClean: string;
   bingoScanCamera: string;
-  bingoScanPhoto: string;
   bingoScanFixHint: string;
   bingoScanNext: string;
 }
@@ -1932,7 +1931,6 @@ const en: Strings = {
   bingoScanBingo: "BINGO — this card's numbers win!",
   bingoScanClean: "No bingo — this card's numbers don't make a line.",
   bingoScanCamera: "Camera unavailable — allow camera access and try again.",
-  bingoScanPhoto: "Check from a photo",
   bingoScanFixHint: "Tap a square to fix a misread number.",
   bingoScanNext: "Next card",
 };
@@ -2798,7 +2796,6 @@ const es: Strings = {
   bingoScanBingo: "¡BINGO! Este cartón gana.",
   bingoScanClean: "Sin bingo: los números de este cartón no forman línea.",
   bingoScanCamera: "Cámara no disponible — permite el acceso a la cámara e inténtalo de nuevo.",
-  bingoScanPhoto: "Revisar desde una foto",
   bingoScanFixHint: "Toca una casilla para corregir un número mal leído.",
   bingoScanNext: "Siguiente cartón",
 };
@@ -3626,7 +3623,6 @@ const zh: Strings = {
   bingoScanBingo: "BINGO！这张卡赢了。",
   bingoScanClean: "没有宾果 — 这张卡的数字连不成一条线。",
   bingoScanCamera: "无法使用相机 — 请允许相机权限后重试。",
-  bingoScanPhoto: "用照片核对",
   bingoScanFixHint: "点按格子可更正读错的数字。",
   bingoScanNext: "下一张卡",
 };
@@ -4550,7 +4546,6 @@ const so: Strings = {
   bingoScanBingo: "BINGO — kaarkan waa guuleystay!",
   bingoScanClean: "Bingo ma jiro — tirooyinka kaarkan xariiq ma sameeyaan.",
   bingoScanCamera: "Kamerada lama heli karo — ogolow kamerada kadibna isku day mar kale.",
-  bingoScanPhoto: "Ka hubi sawir",
   bingoScanFixHint: "Taabo sanduuq si aad u saxdo lambar si khaldan loo akhriyay.",
   bingoScanNext: "Kaarka xiga",
 };
