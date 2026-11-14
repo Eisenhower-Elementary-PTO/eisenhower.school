@@ -40,7 +40,7 @@ needs a session.
 ```
 apps/home           One-page Worker owning the apex, eisenhower.school. Server-rendered, no bundle. One of only FOUR indexed surfaces (with /faq beside it, the storefront, and the PTO public pages).
 apps/web            Directory SPA → directory.eisenhower.school. Design system in src/components, screens in src/screens.
-apps/calendar       Calendar SPA → calendar.eisenhower.school. Shares API/D1/session; design system COPIED, not imported.
+apps/calendar       Calendar SPA → calendar.eisenhower.school. Shares API/D1/session; design system COPIED, not imported. ONE Pages Function, `/e/:date/:slug`, writes the event's title/when/where into the SPA's head so links unfurl in Slack/SMS (anonymous `publicEventOf` read only; any failure serves the bare bundle). ROUTING.md.
 apps/newsletter     Newsletter SPA → newsletter.eisenhower.school. Admin authoring (TipTap) + member preferences, PLUS Pages Functions serving the public archive. Design system COPIED.
 apps/store          Store SPA → store.eisenhower.school. Cart + admin in the bundle, PLUS Pages Functions serving the PUBLIC, INDEXED storefront. Printful + Stripe. Design system COPIED. Vendor/DNS setup: SETUP.md.
 apps/api            Hono Worker → api-directory.eisenhower.school. Serves ALL the SPAs. Routes in src/routes, logic in src/lib, middleware in src/middleware.

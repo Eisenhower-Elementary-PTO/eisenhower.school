@@ -1,0 +1,23 @@
+# Cloudflare Pages project for the calendar.
+#
+# Until link previews this was a pure static deploy with no wrangler.toml. It
+# has one now because it ships a Pages Function — /e/:date/:slug, which writes
+# the event's title, time and place into the head so Slack / iMessage / SMS can
+# unfurl it (functions/e/[date]/[slug].ts) — and `wrangler pages deploy` needs
+# the output directory for a project that has Functions. API_BASE is needed at
+# REQUEST time, so a Vite build variable can't carry it.
+#
+# SCHOOL_TIMEZONE must agree with the other places CLAUDE.md lists: the card
+# names the same wall-clock time the page does.
+
+name = "school-calendar"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+[vars]
+API_BASE = "https://api-directory.eisenhower.school"
+SCHOOL_TIMEZONE = "America/Chicago"
+
+[env.preview.vars]
+API_BASE = "https://api-directory.eisenhower.school"
+SCHOOL_TIMEZONE = "America/Chicago"

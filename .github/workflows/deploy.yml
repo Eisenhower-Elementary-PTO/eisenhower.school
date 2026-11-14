@@ -99,8 +99,8 @@ jobs:
   # Every Pages project (and its custom domain) is created BY HAND once — CI
   # deploys to them, it does not provision them. Two deploy forms:
   #   - `dist --project-name …` for pure-static apps;
-  #   - bare `pages deploy` for apps that ship Pages Functions (newsletter,
-  #     store, pto), which deploy from their own wrangler.toml — that is where
+  #   - bare `pages deploy` for apps that ship Pages Functions (calendar,
+  #     newsletter, store, pto), which deploy from their own wrangler.toml — that is where
   #     the Functions get API_BASE. See each app's ROUTING.md.
   # Each entry's `env` is that app's exact VITE_* set, written to GITHUB_ENV;
   # the sets differ on purpose (an app isn't given its own URL, only pto is
@@ -123,8 +123,9 @@ jobs:
               VITE_LOSTFOUND_URL=https://lostandfound.eisenhower.school
 
           # VITE_SCHOOL_TIMEZONE must match SCHOOL_TIMEZONE in apps/api/wrangler.toml.
+          # Functions: /e/:date/:slug (link-preview meta tags).
           - app: calendar
-            deploy: dist --project-name school-calendar
+            deploy: ""
             env: |
               VITE_API_URL=https://api-directory.eisenhower.school
               VITE_DIRECTORY_URL=https://directory.eisenhower.school
