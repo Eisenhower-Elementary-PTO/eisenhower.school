@@ -169,6 +169,40 @@ export const scannerStyles = css`
     font-size: 0.9em;
   }
 
+  /* Overlay, not a replacement view: the <video> must exist for the camera
+     to warm up behind it. */
+  .start {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: Canvas;
+    color: CanvasText;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    padding: 2em;
+    text-align: center;
+  }
+
+  .start-btn {
+    font: inherit;
+    font-size: 1.6em;
+    font-weight: 700;
+    padding: 0.8em 1.6em;
+    border: 0;
+    border-radius: 0.8em;
+    background: var(--red);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .start p {
+    margin: 0;
+    opacity: 0.8;
+  }
+
   /* ── banners ── */
 
   .banner {

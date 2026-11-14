@@ -17,6 +17,7 @@ import { scanCard, MIN_GRID_QUALITY, type CardScan, type Rgba } from "./vision.j
 import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
 import { checkCard, type CheckResult } from "./check.js";
+import { armBuzzer, buzzBingo, needsUnlock, unlockBuzzer } from "./buzz.js";
 import scannerStyles from "./bingo-scanner.styles.js";
 
 /** Card aspect: the boards are a whisker taller than wide. */
@@ -37,6 +38,7 @@ export class BingoScanner extends LitElement {
   @state() private numbers: (number | null)[] = Array.from({ length: 25 }, () => null);
   @state() private settled = 1; // FREE is always settled
   @state() private editing: number | null = null;
+  @state() private needsStart = needsUnlock();
 
   @query("video") private videoEl?: HTMLVideoElement;
   @query(".guide") private guideEl?: HTMLElement;
@@ -51,9 +53,11 @@ export class BingoScanner extends LitElement {
   private workCanvas = document.createElement("canvas");
   private readCursor = 0;
   private busy = false;
+  private buzzed = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
+    armBuzzer();
     this.polling = true;
     void this.pollLoop();
     document.addEventListener("visibilitychange", this.onVisibility);
@@ -262,10 +266,33 @@ export class BingoScanner extends LitElement {
     const mode = aligned && result?.readable ? (result.lines.length > 0 ? "bingo" : "nobingo") : null;
     if (mode) this.setAttribute("data-verdict", mode);
     else this.removeAttribute("data-verdict");
+    // Buzz once when a card TURNS into a bingo, not on every re-render while
+    // it stays in view. Leaving bingo (next card, a fix) re-arms it.
+    if (mode === "bingo") {
+      if (!this.buzzed) {
+        this.buzzed = true;
+        buzzBingo();
+      }
+    } else {
+      this.buzzed = false;
+    }
+  }
+
+  private startScreen(): TemplateResult {
+    return html`<div class="start">
+      <button
+        class="start-btn"
+        @click=${() => void unlockBuzzer(() => (this.needsStart = needsUnlock()))}
+      >
+        ${t("bingoScanStart")}
+      </button>
+      <p>${t("bingoScanStartHint")}</p>
+    </div>`;
   }
 
   override render(): TemplateResult {
     return html`
+      ${this.needsStart ? this.startScreen() : nothing}
       <main class="scanview" @click=${this.onTapAnywhere}>
         ${this.renderViewfinder()}
         <div class="statusrow">
