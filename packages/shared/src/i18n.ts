@@ -1012,6 +1012,8 @@ export interface Strings {
   bingoScanCamera: string;
   bingoScanFixHint: string;
   bingoScanNext: string;
+  bingoScanStart: string;
+  bingoScanStartHint: string;
 }
 
 const en: Strings = {
@@ -1933,6 +1935,8 @@ const en: Strings = {
   bingoScanCamera: "Camera unavailable — allow camera access and try again.",
   bingoScanFixHint: "Tap a square to fix a misread number.",
   bingoScanNext: "Next card",
+  bingoScanStart: "Tap to start",
+  bingoScanStartHint: "Turns on the bingo buzzer and sound.",
 };
 
 const es: Strings = {
@@ -2798,6 +2802,8 @@ const es: Strings = {
   bingoScanCamera: "Cámara no disponible — permite el acceso a la cámara e inténtalo de nuevo.",
   bingoScanFixHint: "Toca una casilla para corregir un número mal leído.",
   bingoScanNext: "Siguiente cartón",
+  bingoScanStart: "Toca para empezar",
+  bingoScanStartHint: "Activa el zumbador y el sonido del bingo.",
 };
 
 const zh: Strings = {
@@ -3625,6 +3631,8 @@ const zh: Strings = {
   bingoScanCamera: "无法使用相机 — 请允许相机权限后重试。",
   bingoScanFixHint: "点按格子可更正读错的数字。",
   bingoScanNext: "下一张卡",
+  bingoScanStart: "点击开始",
+  bingoScanStartHint: "开启宾果蜂鸣和声音。",
 };
 
 const so: Strings = {
@@ -4548,6 +4556,8 @@ const so: Strings = {
   bingoScanCamera: "Kamerada lama heli karo — ogolow kamerada kadibna isku day mar kale.",
   bingoScanFixHint: "Taabo sanduuq si aad u saxdo lambar si khaldan loo akhriyay.",
   bingoScanNext: "Kaarka xiga",
+  bingoScanStart: "Taabo si aad u bilowdo",
+  bingoScanStartHint: "Waxay shidaysaa buuzarka iyo codka bingo.",
 };
 
 export const dictionaries: Record<Locale, Strings> = { en, es, zh, so };

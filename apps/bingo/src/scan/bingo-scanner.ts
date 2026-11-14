@@ -17,7 +17,7 @@ import { scanCard, MIN_GRID_QUALITY, type CardScan, type Rgba } from "./vision.j
 import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
 import { checkCard, type CheckResult } from "./check.js";
-import { armBuzzer, buzzBingo } from "./buzz.js";
+import { armBuzzer, buzzBingo, needsUnlock, unlockBuzzer } from "./buzz.js";
 import scannerStyles from "./bingo-scanner.styles.js";
 
 /** Card aspect: the boards are a whisker taller than wide. */
@@ -38,6 +38,7 @@ export class BingoScanner extends LitElement {
   @state() private numbers: (number | null)[] = Array.from({ length: 25 }, () => null);
   @state() private settled = 1; // FREE is always settled
   @state() private editing: number | null = null;
+  @state() private needsStart = needsUnlock();
 
   @query("video") private videoEl?: HTMLVideoElement;
   @query(".guide") private guideEl?: HTMLElement;
@@ -277,8 +278,21 @@ export class BingoScanner extends LitElement {
     }
   }
 
+  private startScreen(): TemplateResult {
+    return html`<div class="start">
+      <button
+        class="start-btn"
+        @click=${() => void unlockBuzzer(() => (this.needsStart = needsUnlock()))}
+      >
+        ${t("bingoScanStart")}
+      </button>
+      <p>${t("bingoScanStartHint")}</p>
+    </div>`;
+  }
+
   override render(): TemplateResult {
     return html`
+      ${this.needsStart ? this.startScreen() : nothing}
       <main class="scanview" @click=${this.onTapAnywhere}>
         ${this.renderViewfinder()}
         <div class="statusrow">

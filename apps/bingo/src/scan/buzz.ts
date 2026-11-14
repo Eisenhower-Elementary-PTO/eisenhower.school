@@ -103,3 +103,24 @@ export function buzzBingo(): void {
     // Haptic hack unavailable.
   }
 }
+
+/** True when a tap is still needed before the buzzer can sound: audio is
+ *  supported but its context is not running yet. */
+export function needsUnlock(): boolean {
+  const c = audioContext();
+  return c !== null && c.state !== "running";
+}
+
+/** Call from a click handler: resumes audio, calls `onChange` whenever the
+ *  context's state moves (iOS can suspend it again), and returns once resumed. */
+export async function unlockBuzzer(onChange: () => void): Promise<void> {
+  const c = audioContext();
+  if (!c) return;
+  c.onstatechange = onChange;
+  try {
+    await c.resume();
+  } catch {
+    // Still locked: the start screen stays up.
+  }
+  onChange();
+}
