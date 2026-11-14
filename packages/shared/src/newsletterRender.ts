@@ -1808,6 +1808,11 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-masthead img{margin:0 auto 14px}
   /* Links keep their href meaning on screen but read as noise in ink. */
   a{color:inherit;text-decoration:none}
+  /* ...but a link in the issue itself is underlined: on paper there is no
+     hover or colour to say "this is a link", and the numbered QR code in the
+     margin points at underlined text. Site chrome (footer, language bar)
+     stays plain. Later and more specific than the rule above, so it wins. */
+  .nl-body a[href],.nl-event-title-link,.nl-event-volunteer-link,.nl-foot a[href]{text-decoration:underline}
   /* Emojis don't survive black-and-white printing — they come out as grey
      smudges or empty boxes — so paper goes without them. The renderer wraps
      each one (hideEmojiOnPaper); on screen the span is inert. */
