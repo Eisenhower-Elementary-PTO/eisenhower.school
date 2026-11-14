@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@sd/shared": "workspace:*",
-    "@tiptap/core": "^2.11.5",
+    "@tiptap/core": "^3.30.5",
     "@tiptap/extension-image": "^2.11.5",
     "@tiptap/extension-link": "^2.11.5",
     "@tiptap/extension-placeholder": "^2.11.5",
@@ -33,7 +33,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7",
+    "vite": "^6.4.5",
     "vitest": "^2.1.8",
     "wrangler": "^4.129.0"
   }
