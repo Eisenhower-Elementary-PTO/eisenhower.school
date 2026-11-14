@@ -15,6 +15,19 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="Lost &amp; Found" />
     <title>Eisenhower Lost &amp; Found</title>
+
+    <!-- Link preview (Slack, iMessage, SMS). Static on purpose: unfurlers read
+         the HTML without running the bundle, and the same card for every route
+         means no item, photo or claim detail can reach a chat preview. The
+         image must be an absolute URL; no og:url, since this one head serves
+         every route. -->
+    <meta name="description" content="Missing a jacket, water bottle or lunchbox? Browse what's turned up at school and tell us which one is yours." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Eisenhower Lost &amp; Found" />
+    <meta property="og:title" content="Eisenhower Lost &amp; Found" />
+    <meta property="og:description" content="Missing a jacket, water bottle or lunchbox? Browse what's turned up at school and tell us which one is yours." />
+    <meta property="og:image" content="https://lostandfound.eisenhower.school/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>
