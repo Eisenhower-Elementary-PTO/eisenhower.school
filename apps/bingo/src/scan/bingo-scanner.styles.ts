@@ -77,7 +77,7 @@ export const scannerStyles = css`
     gap: 0.6em;
     /* Home-screen standalone mode runs edge-to-edge: keep the content out
        of the notch and the home indicator (viewport-fit=cover). */
-    padding: calc(1em + env(safe-area-inset-top, 0px)) calc(1em + env(safe-area-inset-right, 0px))
+    padding: env(safe-area-inset-top, 0px) calc(1em + env(safe-area-inset-right, 0px))
       calc(1em + env(safe-area-inset-bottom, 0px)) calc(1em + env(safe-area-inset-left, 0px));
     width: 100%;
     max-width: 34em;
@@ -243,20 +243,22 @@ export const scannerStyles = css`
 
   /* ── the read grid ── */
 
+  /* The grid takes whatever height the camera and status row leave: five
+     equal rows that stretch to fill (never shorter than a tappable 2.4em, so
+     a short phone scrolls rather than crushing the numbers). */
   .grid {
+    flex: 1 0 auto;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, minmax(2.4em, 1fr));
     gap: 0.3em;
   }
 
-  /* Wider than tall: five square rows were as tall as the camera view and
-     pushed the bottom row off the screen. */
   .grid .cell {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    aspect-ratio: 1.6;
     border-radius: 0.5em;
     font: inherit;
     font-weight: 700;
@@ -303,16 +305,14 @@ export const scannerStyles = css`
     color: inherit;
   }
 
-  /* Short phones (SE-class, or a browser with chrome showing): flatten the
-     cells further so the last row is still on screen. */
+  /* Short phones (SE-class, or a browser with chrome showing): tighten the
+     gaps; the grid rows already shrink to fit. */
   @media (max-height: 740px) {
     main {
       gap: 0.4em;
-      padding-top: calc(0.5em + env(safe-area-inset-top, 0px));
       padding-bottom: calc(0.5em + env(safe-area-inset-bottom, 0px));
     }
     .grid .cell {
-      aspect-ratio: 2.2;
       font-size: 0.95em;
     }
   }
