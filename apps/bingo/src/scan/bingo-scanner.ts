@@ -18,6 +18,7 @@ import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
 import { checkCard, type CheckResult } from "./check.js";
 import { armBuzzer, buzzBingo, needsUnlock, unlockBuzzer } from "./buzz.js";
+import { PerfStats, perfEnabled } from "./perf.js";
 import scannerStyles from "./bingo-scanner.styles.js";
 
 /** Card aspect: the boards are a whisker taller than wide. */
@@ -54,6 +55,8 @@ export class BingoScanner extends LitElement {
   private readCursor = 0;
   private busy = false;
   private buzzed = false;
+  private perf = perfEnabled ? new PerfStats() : null;
+  private perfEl: HTMLPreElement | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -195,24 +198,57 @@ export class BingoScanner extends LitElement {
   private tick(): void {
     if (document.hidden || this.busy) return;
     this.busy = true;
+    const perf = this.perf;
+    const t0 = perf ? performance.now() : 0;
+    perf?.tickStart(t0);
     try {
       const region = this.captureRegion();
+      if (perf) perf.record("capture", performance.now() - t0);
       if (region) this.ingestFrame(region, READS_PER_TICK);
     } finally {
       this.busy = false;
+      if (perf) {
+        perf.record("total", performance.now() - t0);
+        this.showPerf(perf);
+      }
     }
+  }
+
+  /** ?perf readout. Written straight to the DOM, not through Lit state, so
+   *  drawing it doesn't trigger the re-render it is trying to measure. */
+  private showPerf(perf: PerfStats): void {
+    let el = this.perfEl;
+    if (!el) {
+      const host = this.renderRoot.querySelector(".viewfinder");
+      if (!host) return;
+      el = document.createElement("pre");
+      el.style.cssText =
+        "position:absolute;left:0.5em;top:0.5em;margin:0;padding:0.4em 0.6em;" +
+        "background:rgba(0,0,0,0.7);color:#7CFC9A;font:11px/1.35 ui-monospace,monospace;" +
+        "border-radius:0.4em;pointer-events:none;z-index:5;white-space:pre";
+      host.appendChild(el);
+      this.perfEl = el;
+    }
+    el.textContent = perf.report();
   }
 
   /** Feed one frame into the fusion: number reads for up to `readBudget`
    *  unsettled cells. A poorly aligned frame is discarded whole. The shutter
    *  state only picks the reader's mode (covered numbers show through red). */
   private ingestFrame(region: Rgba, readBudget: number): void {
+    const perf = this.perf;
+    const tScan = perf ? performance.now() : 0;
     const scan = scanCard(region);
+    if (perf) perf.record("scan", performance.now() - tScan);
     this.scan = scan;
-    if (scan.gridQuality < MIN_GRID_QUALITY) {
+    const aligned = scan.gridQuality >= MIN_GRID_QUALITY;
+    perf?.noteAligned(aligned);
+    if (!aligned) {
       this.refreshVerdict();
       return;
     }
+    const tRead = perf ? performance.now() : 0;
+    let reads = 0;
     const pending = scan.cells.filter((c) => this.fusion.needsReading(c.row * 5 + c.col));
     // Round-robin so a hard cell can't starve the rest.
     const start = this.readCursor % Math.max(1, pending.length);
@@ -229,6 +265,12 @@ export class BingoScanner extends LitElement {
         cell.col,
       );
       this.fusion.addReading(cell.row * 5 + cell.col, reading);
+      reads++;
+    }
+    if (perf && reads > 0) {
+      const ms = performance.now() - tRead;
+      perf.record("read", ms);
+      perf.record("cell", ms / reads);
     }
     this.readCursor += readBudget;
     this.refreshVerdict();
