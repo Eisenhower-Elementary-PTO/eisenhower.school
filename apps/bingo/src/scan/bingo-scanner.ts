@@ -23,7 +23,7 @@ import scannerStyles from "./bingo-scanner.styles.js";
 
 /** Card aspect: the boards are a whisker taller than wide. */
 const CARD_ASPECT = 1.03;
-const SCAN_INTERVAL_MS = 700;
+const SCAN_INTERVAL_MS = 300;
 const POLL_MS = 5000;
 /** Number reads per tick — the heavy half of a frame stays bounded. */
 const READS_PER_TICK = 8;
