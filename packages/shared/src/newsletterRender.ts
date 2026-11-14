@@ -1804,6 +1804,8 @@ export const NEWSLETTER_PRINT_RULES = `
      masthead, so the logo keeps its block; the padding goes with the text so
      a logo-less masthead leaves no blank band. */
   .nl-masthead-title{display:none}
+  /* The issue's date line stays off paper too. */
+  .nl-date{display:none}
   .nl-masthead{padding:0}
   .nl-masthead img{margin:0 auto 14px}
   /* Links keep their href meaning on screen but read as noise in ink. */
