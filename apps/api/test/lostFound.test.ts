@@ -986,10 +986,10 @@ describe("the suggested rotation", () => {
 
 describe("the suggested crop", () => {
   it("makes a pixel-square rectangle from the model's centre and size", () => {
-    // 4:3 landscape, square of 0.5 of the short side centred: 0.5*3000 = 1500px
+    // 4:3 landscape, 0.5 of the short side grown by the 1.3 breathing room: 0.65*3000 = 1950
     const c = cleanCrop({ cx: 0.5, cy: 0.5, size: 0.5 }, 4000, 3000)!;
-    expect(c.w * 4000).toBeCloseTo(1500, 0);
-    expect(c.h * 3000).toBeCloseTo(1500, 0);
+    expect(c.w * 4000).toBeCloseTo(1950, 0);
+    expect(c.h * 3000).toBeCloseTo(1950, 0);
     expect(c.x + c.w / 2).toBeCloseTo(0.5, 3);
   });
 

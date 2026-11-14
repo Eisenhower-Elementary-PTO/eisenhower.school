@@ -69,6 +69,8 @@ interface Row {
   /** The AI's suggested turn, once it has looked; null when it thinks it's upright. */
   turn: Turn | null;
   turning: boolean;
+  /** Auto-apply has been attempted once; a failure leaves the manual button. */
+  autoTried?: boolean;
 }
 
 const PHASE_TEXT: Record<Phase, (r: Row) => string> = {
@@ -215,7 +217,7 @@ export function Upload() {
     update(r.key, { turning: true });
     try {
       const { photo, thumb } = await rotatePhoto(r.photo, r.turn);
-      await api.replacePhoto(r.itemId, photo);
+      await api.replacePhoto(r.itemId, photo, r.turn);
       await api.uploadThumb(r.itemId, thumb);
       URL.revokeObjectURL(r.preview);
       update(r.key, { photo, preview: URL.createObjectURL(thumb), turn: null, turning: false });
@@ -223,6 +225,17 @@ export function Upload() {
       update(r.key, { turning: false });
     }
   };
+
+  // The AI said it's turned: just turn it (once; a failure leaves the button).
+  useEffect(() => {
+    for (const r of rows) {
+      if (r.turn && r.itemId && !r.turning && !r.autoTried && (r.phase === "held" || r.phase === "live")) {
+        update(r.key, { autoTried: true });
+        void applyTurn(r);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   /** "Add N items": every staged photo, UPLOAD_CONCURRENCY at a time. */
   const submit = async () => {

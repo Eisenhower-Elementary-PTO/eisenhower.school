@@ -427,6 +427,10 @@ export function cropOf(row: Pick<LfItemRow, "crop_x" | "crop_y" | "crop_w" | "cr
  *  size as a fraction of the SHORTER side) as a pixel-square rectangle kept
  *  inside the photo. Null when it is missing, nonsense, absurdly small, or
  *  would take in nearly the whole photo (nothing to gain over the default). */
+/** The model hugs the item however it is asked not to, so the margin is added
+ *  here: the square is grown 30% around the same centre (clamped to the photo). */
+const CROP_BREATHING_ROOM = 1.3;
+
 export function cleanCrop(raw: unknown, width: number, height: number): LfCrop | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -437,7 +441,7 @@ export function cleanCrop(raw: unknown, width: number, height: number): LfCrop |
   if (typeof cx !== "number" || typeof cy !== "number" || typeof size !== "number") return null;
   if (![cx, cy, size].every(Number.isFinite)) return null;
   if (cx < 0 || cx > 1 || cy < 0 || cy > 1 || size < 0.15 || size > 1) return null;
-  const side = size * Math.min(width, height);
+  const side = Math.min(size * CROP_BREATHING_ROOM, 1) * Math.min(width, height);
   const w = side / width;
   const h = side / height;
   // Nearly the whole photo: a crop of 97%+ is the default with extra steps.
@@ -601,7 +605,7 @@ Reply with only a JSON object with exactly these keys:
 - "tags": array of 5-12 lowercase search keywords a parent might type, including synonyms (e.g. "bottle", "flask", "tumbler") and notable features
 - "rotation": how many degrees the photo must be turned CLOCKWISE so the item stands the way it is normally used or worn (a bottle cap up, a jacket collar up, text reading left to right): exactly one of 0, 90, 180, 270. Use 0 if it is already upright or if you can't tell
 
-- "crop": the smallest SQUARE that contains the whole item with a small margin (about 5%), so the item fills a square tile. Measure it on the photo exactly as it is now, before any rotation. An object with "cx" and "cy" (the square's centre, each 0 to 1 as a fraction of the photo's width and height) and "size" (the square's side, 0 to 1, as a fraction of the photo's SHORTER side). Never cut off any part of the item: if it fills the photo, or you can't tell, use size 1
+- "crop": the smallest SQUARE that contains the whole item with a GENEROUS margin (about 15% of the item's size on every side), so there is clear space around it in the square tile. Measure it on the photo exactly as it is now, before any rotation. An object with "cx" and "cy" (the square's centre, each 0 to 1 as a fraction of the photo's width and height) and "size" (the square's side, 0 to 1, as a fraction of the photo's SHORTER side). Never cut off any part of the item: if it fills the photo, or you can't tell, use size 1
 
 Names of people must appear ONLY in "visible_text" and "name_text" — never in the title, description, or tags.
 Never guess a brand or name you can't actually read.`;
@@ -643,7 +647,7 @@ async function describeOnce(ai: Ai, model: string, dataUrl: string, dims: Dims |
 type Dims = { width: number; height: number };
 
 const CROP_PROMPT = `You frame photos of items in a school's lost and found for a square grid tile.
-Find the single main item (if several, the most prominent). Choose the smallest SQUARE that contains the WHOLE item with a small margin (about 5%), so the item fills the tile. Never cut off any part of the item.
+Find the single main item (if several, the most prominent). Choose the smallest SQUARE that contains the WHOLE item with a GENEROUS margin (about 15% of the item's size on every side), so there is clear space around it in the tile. Never cut off any part of the item.
 
 Reply with only a JSON object: {"crop": {"cx": number, "cy": number, "size": number}}
 - "cx", "cy": the square's centre, each 0 to 1, as a fraction of the photo's width and height

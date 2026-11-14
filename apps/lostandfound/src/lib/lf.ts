@@ -209,10 +209,13 @@ export type Turn = "cw" | "ccw" | "half";
  *  6 is "turn 90° clockwise to display", 8 anticlockwise, 3 is 180°. */
 const TURN_ORIENTATION: Record<Turn, number> = { cw: 6, ccw: 8, half: 3 };
 
-/** The turn that applies the model's suggestion (degrees clockwise), or null
- *  when it thinks the photo is already upright. */
+/** The turn that applies the model's suggestion, or null when it thinks the
+ *  photo is already upright. The quarter turns are deliberately CROSSED: the
+ *  model's 90/270 came out reversed in production (photos ended up upside
+ *  down), so what it calls 90 is applied anticlockwise and vice versa. 180 is
+ *  symmetric and unaffected. */
 export function turnFor(rotation: LfRotation): Turn | null {
-  return rotation === 90 ? "cw" : rotation === 270 ? "ccw" : rotation === 180 ? "half" : null;
+  return rotation === 90 ? "ccw" : rotation === 270 ? "cw" : rotation === 180 ? "half" : null;
 }
 
 /** "sideways" or "upside down", for the prompt that offers the fix. */
