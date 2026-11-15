@@ -51,8 +51,19 @@ export interface CellResult {
   quality: number;
 }
 
+/** A fitted grid as fractions of the analysed region (resolution-free), so a
+ *  scan can hand its fit to the next frame's search. */
+export interface LatticeHint {
+  x0: number;
+  y0: number;
+  px: number;
+  py: number;
+}
+
 export interface CardScan {
   cells: CellResult[];
+  /** The fitted grid: feed it back as `scanCard`'s `hint` to track the card. */
+  lattice: LatticeHint;
   /** Mean tab/shutter evidence over all 25 cells, 0..1 — gate on this before trusting states. */
   gridQuality: number;
   uncertain: number;
@@ -112,38 +123,49 @@ export function downscale(src: Rgba, targetW: number): Rgba {
   return { data: out, width: targetW, height: targetH };
 }
 
-function toHsv(r: number, g: number, b: number): [number, number, number] {
-  const rf = r / 255, gf = g / 255, bf = b / 255;
-  const max = Math.max(rf, gf, bf), min = Math.min(rf, gf, bf);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === rf) h = ((gf - bf) / d) % 6;
-    else if (max === gf) h = (bf - rf) / d + 2;
-    else h = (rf - gf) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return [h, max === 0 ? 0 : d / max, max];
-}
-
 function computePlanes(img: Rgba): Planes {
   const { width: w, height: h, data } = img;
   const n = w * h;
   const hue = new Float32Array(n), sat = new Float32Array(n), val = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const [hh, ss, vv] = toHsv(data[i * 4] ?? 0, data[i * 4 + 1] ?? 0, data[i * 4 + 2] ?? 0);
-    hue[i] = hh; sat[i] = ss; val[i] = vv;
+    // HSV inline: this runs for every pixel of every frame, and a returned
+    // tuple per pixel was ~180k short-lived arrays a tick for the GC.
+    const rf = (data[i * 4] ?? 0) / 255, gf = (data[i * 4 + 1] ?? 0) / 255, bf = (data[i * 4 + 2] ?? 0) / 255;
+    const max = Math.max(rf, gf, bf), d = max - Math.min(rf, gf, bf);
+    let hh = 0;
+    if (d !== 0) {
+      if (max === rf) hh = ((gf - bf) / d) % 6;
+      else if (max === gf) hh = (bf - rf) / d + 2;
+      else hh = (rf - gf) / d + 4;
+      hh *= 60;
+      if (hh < 0) hh += 360;
+    }
+    hue[i] = hh;
+    sat[i] = max === 0 ? 0 : d / max;
+    val[i] = max;
   }
   // Board brightness reference: median value over every non-red pixel. The
   // card fills the guide and the board is most of it, so the median is the
   // board whatever the model's layout (plates, ink and glare are minorities).
-  const vs: number[] = [];
+  // Value is the max channel / 255, so it takes only 256 distinct values: a
+  // histogram finds the same median a sort would, without sorting ~60k floats.
+  const hist = new Uint32Array(256);
+  let count = 0;
   for (let i = 0; i < n; i += 3) {
-    if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) vs.push(val[i] ?? 0);
+    if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) {
+      hist[Math.round((val[i] ?? 0) * 255)]++;
+      count++;
+    }
   }
-  vs.sort((a, b) => a - b);
-  const vBoard = vs[(vs.length / 2) | 0] ?? 0.8;
+  let vBoard = 0.8;
+  if (count > 0) {
+    const target = (count / 2) | 0;
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += hist[v] ?? 0;
+      if (seen > target) { vBoard = Math.fround(v / 255); break; }
+    }
+  }
   return { w, h, hue, sat, val, vBoard };
 }
 
@@ -242,7 +264,15 @@ const latY = (l: Lattice, r: number): number => l.y0 + (r - 2) * l.py;
  *  pitch ratio) using summed-area tables, so the search can be wide — card
  *  models differ in height (a woodgrain board is ~10% taller than the cream
  *  Finger-Tip one) and a hand-held guide never frames them identically. */
-export function scanCard(region: Rgba): CardScan {
+export function scanCard(region: Rgba, hint?: LatticeHint | null): CardScan {
+  const tracked = scanOnce(region, hint ?? null);
+  // A track the quality gate rejects (card moved far, or a different card)
+  // is re-found from scratch, so tracking can only ever save work.
+  if (hint && tracked.gridQuality < MIN_GRID_QUALITY) return scanOnce(region, null);
+  return tracked;
+}
+
+function scanOnce(region: Rgba, hint: LatticeHint | null): CardScan {
   const img = downscale(region, ANALYSIS_WIDTH);
   const p = computePlanes(img);
   const { w, h } = p;
@@ -275,21 +305,42 @@ export function scanCard(region: Rgba): CardScan {
     return s;
   };
 
-  // Coarse-to-fine over the four lattice parameters.
-  let best: Lattice = { x0: 0.512 * w, y0: 0.5 * h, px: 0.19 * w, py: 0.145 * h };
-  let bestScore = -1;
-  for (let pxF = 0.16; pxF <= 0.2051; pxF += 0.005) {
-    for (let ratio = 0.72; ratio <= 0.8801; ratio += 0.04) {
-      const px = pxF * w, py = px * ratio;
-      for (let y0 = 0.3 * h; y0 <= 0.65 * h; y0 += 0.01 * h) {
-        for (let x0 = 0.42 * w; x0 <= 0.6 * w; x0 += 0.01 * w) {
-          const l: Lattice = { x0, y0, px, py };
-          const sc = latticeScore(l);
-          if (sc > bestScore) { bestScore = sc; best = l; }
+  // Coarse-to-fine over the four lattice parameters. With a `hint` (the last
+  // frame's fit) the coarse pass only looks near it: the card moves a little
+  // between frames, so re-searching the whole frame (~34k grids) is repeated
+  // work. The window stays under half a row pitch, so a track can never hop
+  // a row (the one-row-shifted lock the anchors guard against). A track that
+  // fails the quality gate falls back to the full search below.
+  const coarse = (near: Lattice | null): { best: Lattice; score: number } => {
+    let best: Lattice = { x0: 0.512 * w, y0: 0.5 * h, px: 0.19 * w, py: 0.145 * h };
+    let bestScore = -1;
+    const pxLo = near ? Math.max(0.16, near.px / w - 0.01) : 0.16;
+    const pxHi = near ? Math.min(0.2051, near.px / w + 0.01) : 0.2051;
+    const rNow = near ? near.py / near.px : 0;
+    const rLo = near ? Math.max(0.72, rNow - 0.04) : 0.72;
+    const rHi = near ? Math.min(0.8801, rNow + 0.04) : 0.8801;
+    const yLo = near ? near.y0 - 0.04 * h : 0.3 * h;
+    const yHi = near ? near.y0 + 0.04 * h : 0.65 * h;
+    const xLo = near ? near.x0 - 0.04 * w : 0.42 * w;
+    const xHi = near ? near.x0 + 0.04 * w : 0.6 * w;
+    for (let pxF = pxLo; pxF <= pxHi; pxF += 0.005) {
+      for (let ratio = rLo; ratio <= rHi; ratio += 0.04) {
+        const px = pxF * w, py = px * ratio;
+        for (let y0 = yLo; y0 <= yHi; y0 += 0.01 * h) {
+          for (let x0 = xLo; x0 <= xHi; x0 += 0.01 * w) {
+            const l: Lattice = { x0, y0, px, py };
+            const sc = latticeScore(l);
+            if (sc > bestScore) { bestScore = sc; best = l; }
+          }
         }
       }
     }
-  }
+    return { best, score: bestScore };
+  };
+  const near: Lattice | null = hint
+    ? { x0: hint.x0 * w, y0: hint.y0 * h, px: hint.px * w, py: hint.py * h }
+    : null;
+  let { best, score: bestScore } = coarse(near);
   // Fine pass around the coarse winner.
   const c0 = best;
   for (let dpx = -0.006; dpx <= 0.0061; dpx += 0.003) {
@@ -363,5 +414,6 @@ export function scanCard(region: Rgba): CardScan {
       cells.push({ row: r, col: c, cx: cx / p.w, cy: cy / p.h, redFrac, state, quality });
     }
   }
-  return { cells, gridQuality: qualitySum / 25, uncertain, winW: ww / w, winH: wh / h };
+  const lattice: LatticeHint = { x0: best.x0 / w, y0: best.y0 / h, px: best.px / w, py: best.py / h };
+  return { cells, lattice, gridQuality: qualitySum / 25, uncertain, winW: ww / w, winH: wh / h };
 }

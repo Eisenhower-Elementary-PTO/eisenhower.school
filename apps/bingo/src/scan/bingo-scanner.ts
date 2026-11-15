@@ -13,7 +13,7 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, state, query } from "lit/decorators.js";
 import { api } from "../lib/api.js";
 import { t } from "../lib/i18n.js";
-import { scanCard, MIN_GRID_QUALITY, type CardScan, type Rgba } from "./vision.js";
+import { scanCard, MIN_GRID_QUALITY, type CardScan, type LatticeHint, type Rgba } from "./vision.js";
 import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
 import { checkCard, type CheckResult } from "./check.js";
@@ -27,6 +27,14 @@ const SCAN_INTERVAL_MS = 300;
 const POLL_MS = 5000;
 /** Number reads per tick — the heavy half of a frame stays bounded. */
 const READS_PER_TICK = 8;
+/** Once all 25 numbers are settled and the card is still framed, only every
+ *  Nth tick looks at the camera (a ~1.2s alignment check at 300ms ticks):
+ *  there is nothing left to read, and a new card is a tap away. Saves the
+ *  battery on a phone that is held up for the whole game. */
+const IDLE_EVERY = 4;
+/** Every Nth scan ignores the track and searches the whole frame, so a lock
+ *  that is wrong but still passes the quality gate can't persist. */
+const FULL_SEARCH_EVERY = 8;
 
 @customElement("bingo-scanner")
 export class BingoScanner extends LitElement {
@@ -54,6 +62,10 @@ export class BingoScanner extends LitElement {
   private workCanvas = document.createElement("canvas");
   private readCursor = 0;
   private busy = false;
+  private idleCount = 0;
+  private scanCount = 0;
+  /** The last aligned fit; scanning near it is far cheaper than from scratch. */
+  private track: LatticeHint | null = null;
   private buzzed = false;
   private perf = perfEnabled ? new PerfStats() : null;
   private perfEl: HTMLPreElement | null = null;
@@ -197,8 +209,12 @@ export class BingoScanner extends LitElement {
 
   private tick(): void {
     if (document.hidden || this.busy) return;
-    this.busy = true;
     const perf = this.perf;
+    if (this.isIdle() && ++this.idleCount % IDLE_EVERY !== 0) {
+      perf?.noteIdle();
+      return;
+    }
+    this.busy = true;
     const t0 = perf ? performance.now() : 0;
     perf?.tickStart(t0);
     try {
@@ -212,6 +228,11 @@ export class BingoScanner extends LitElement {
         this.showPerf(perf);
       }
     }
+  }
+
+  /** Nothing left to read and the card is still in frame. */
+  private isIdle(): boolean {
+    return this.settled >= 25 && this.scan !== null && this.scan.gridQuality >= MIN_GRID_QUALITY;
   }
 
   /** ?perf readout. Written straight to the DOM, not through Lit state, so
@@ -238,10 +259,12 @@ export class BingoScanner extends LitElement {
   private ingestFrame(region: Rgba, readBudget: number): void {
     const perf = this.perf;
     const tScan = perf ? performance.now() : 0;
-    const scan = scanCard(region);
+    const useTrack = this.track !== null && this.scanCount++ % FULL_SEARCH_EVERY !== 0;
+    const scan = scanCard(region, useTrack ? this.track : null);
     if (perf) perf.record("scan", performance.now() - tScan);
     this.scan = scan;
     const aligned = scan.gridQuality >= MIN_GRID_QUALITY;
+    this.track = aligned ? scan.lattice : null;
     perf?.noteAligned(aligned);
     if (!aligned) {
       this.refreshVerdict();
