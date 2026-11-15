@@ -1014,6 +1014,10 @@ export interface Strings {
   bingoScanNext: string;
   bingoScanStart: string;
   bingoScanStartHint: string;
+  bingoScanShowCalled: string;
+  bingoScanShowScan: string;
+  bingoScanCalledCount: string; // uses {count} {total}
+  bingoScanCalledNone: string;
 }
 
 const en: Strings = {
@@ -1937,6 +1941,10 @@ const en: Strings = {
   bingoScanNext: "Next card",
   bingoScanStart: "Tap to start",
   bingoScanStartHint: "Turns on the bingo buzzer and sound.",
+  bingoScanShowCalled: "Show called numbers",
+  bingoScanShowScan: "Back to card scan",
+  bingoScanCalledCount: "{count} of {total} numbers called",
+  bingoScanCalledNone: "No numbers called yet",
 };
 
 const es: Strings = {
@@ -2804,6 +2812,10 @@ const es: Strings = {
   bingoScanNext: "Siguiente cartón",
   bingoScanStart: "Toca para empezar",
   bingoScanStartHint: "Activa el zumbador y el sonido del bingo.",
+  bingoScanShowCalled: "Ver números cantados",
+  bingoScanShowScan: "Volver a revisar cartones",
+  bingoScanCalledCount: "{count} de {total} números cantados",
+  bingoScanCalledNone: "Aún no se ha cantado ningún número",
 };
 
 const zh: Strings = {
@@ -3633,6 +3645,10 @@ const zh: Strings = {
   bingoScanNext: "下一张卡",
   bingoScanStart: "点击开始",
   bingoScanStartHint: "开启宾果蜂鸣和声音。",
+  bingoScanShowCalled: "查看已叫号码",
+  bingoScanShowScan: "返回卡片核对",
+  bingoScanCalledCount: "已叫 {count} / {total} 个号码",
+  bingoScanCalledNone: "还没有叫号",
 };
 
 const so: Strings = {
@@ -4558,6 +4574,10 @@ const so: Strings = {
   bingoScanNext: "Kaarka xiga",
   bingoScanStart: "Taabo si aad u bilowdo",
   bingoScanStartHint: "Waxay shidaysaa buuzarka iyo codka bingo.",
+  bingoScanShowCalled: "Tus tirooyinka la yeeray",
+  bingoScanShowScan: "Ku laabo hubinta kaarka",
+  bingoScanCalledCount: "{count} ka mid ah {total} tiro ayaa la yeeray",
+  bingoScanCalledNone: "Weli tiro lama yeerin",
 };
 
 export const dictionaries: Record<Locale, Strings> = { en, es, zh, so };

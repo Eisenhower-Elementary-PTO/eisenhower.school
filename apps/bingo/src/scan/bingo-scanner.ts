@@ -48,6 +48,8 @@ export class BingoScanner extends LitElement {
   @state() private settled = 1; // FREE is always settled
   @state() private editing: number | null = null;
   @state() private needsStart = needsUnlock();
+  /** "scan" reads a card; "called" just lists every number on the board. */
+  @state() private mode: "scan" | "called" = "scan";
 
   @query("video") private videoEl?: HTMLVideoElement;
   @query(".guide") private guideEl?: HTMLElement;
@@ -92,7 +94,7 @@ export class BingoScanner extends LitElement {
   private onVisibility = (): void => {
     if (document.hidden) this.stopCamera();
     else {
-      void this.startCamera();
+      if (this.mode === "scan") void this.startCamera();
       // Catch up now rather than waiting out the timer: numbers were called
       // while the tab was away.
       void this.pollLoop();
@@ -216,7 +218,7 @@ export class BingoScanner extends LitElement {
   // ── the reading loop ─────────────────────────────────────────────────────
 
   private tick(): void {
-    if (document.hidden || this.busy) return;
+    if (document.hidden || this.busy || this.mode !== "scan") return;
     const perf = this.perf;
     if (this.isIdle() && ++this.idleCount % IDLE_EVERY !== 0) {
       perf?.noteIdle();
@@ -316,9 +318,23 @@ export class BingoScanner extends LitElement {
   /** A tap anywhere rescans the card — except on a number square, where a
    *  tap opens the correction field (wiping the card would lose the fix). */
   private onTapAnywhere = (e: Event): void => {
-    if (this.editing !== null) return;
+    if (this.editing !== null || this.mode !== "scan") return;
     if (e.composedPath().some((el) => el instanceof HTMLElement && el.classList.contains("cell"))) return;
     this.nextCard();
+  };
+
+  /** Flip between card scanning and the called-numbers list. The camera is
+   *  released while the list is up (battery) and restarted on the way back. */
+  private toggleMode = (e: Event): void => {
+    e.stopPropagation(); // the main-area tap would otherwise wipe the card
+    this.editing = null;
+    if (this.mode === "scan") {
+      this.mode = "called";
+      this.stopCamera();
+    } else {
+      this.mode = "scan";
+      void this.startCamera();
+    }
   };
 
   private nextCard(): void {
@@ -336,7 +352,7 @@ export class BingoScanner extends LitElement {
   override updated(): void {
     const scan = this.scan, result = this.result;
     const aligned = scan !== null && scan.gridQuality >= MIN_GRID_QUALITY;
-    const mode = aligned && result?.readable ? (result.lines.length > 0 ? "bingo" : "nobingo") : null;
+    const mode = this.mode === "scan" && aligned && result?.readable ? (result.lines.length > 0 ? "bingo" : "nobingo") : null;
     if (mode) this.setAttribute("data-verdict", mode);
     else this.removeAttribute("data-verdict");
     // Buzz once when a card TURNS into a bingo, not on every re-render while
@@ -369,17 +385,20 @@ export class BingoScanner extends LitElement {
       <main class="scanview" @click=${this.onTapAnywhere}>
         ${this.renderViewfinder()}
         <div class="statusrow">
-          <div class="statuscol">${this.renderBanner()}</div>
-          ${this.renderNextButton()}
+          <div class="statuscol">
+            ${this.mode === "scan" ? this.renderBanner() : this.renderCalledBanner()}
+          </div>
+          ${this.mode === "scan" ? this.renderNextButton() : nothing}
+          ${this.renderModeButton()}
         </div>
-        ${this.renderGrid()}
+        ${this.mode === "scan" ? this.renderGrid() : this.renderCalled()}
       </main>
     `;
   }
 
   private renderViewfinder(): TemplateResult {
     return html`
-      <div class="viewfinder">
+      <div class="viewfinder" ?hidden=${this.mode !== "scan"}>
         <video playsinline muted></video>
         <div class="guide" style="aspect-ratio: 1 / ${CARD_ASPECT}">${this.renderOverlay()}</div>
         ${this.cameraError ? html`<p class="camera-error">${t("bingoScanCamera")}</p>` : nothing}
@@ -416,6 +435,45 @@ export class BingoScanner extends LitElement {
             <path d="M20 4v7h-7" />
           </svg>`}
     </button>`;
+  }
+
+  /** Toggle between the scanner and the called-numbers list. */
+  private renderModeButton(): TemplateResult {
+    const label = this.mode === "scan" ? t("bingoScanShowCalled") : t("bingoScanShowScan");
+    return html`<button class="toggle" aria-label=${label} title=${label} @click=${this.toggleMode}>
+      ${this.mode === "scan"
+        ? html`<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>`
+        : html`<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>`}
+    </button>`;
+  }
+
+  private renderCalledBanner(): TemplateResult {
+    const n = this.called.length;
+    return html`<p class="banner hint">
+      ${n === 0 ? t("bingoScanCalledNone") : t("bingoScanCalledCount", { count: n, total: 75 })}
+    </p>`;
+  }
+
+  /** Every number on the board, one column per letter, called ones filled. */
+  private renderCalled(): TemplateResult {
+    const calledSet = new Set(this.called);
+    return html`<div class="called-board">
+      ${[..."BINGO"].map((letter) => html`<span class="letter">${letter}</span>`)}
+      ${Array.from({ length: 15 }, (_, row) =>
+        Array.from({ length: 5 }, (_, col) => {
+          const n = col * 15 + row + 1;
+          return html`<span class="num ${calledSet.has(n) ? "on" : ""}">${n}</span>`;
+        }),
+      )}
+    </div>`;
   }
 
   private renderBanner(): TemplateResult {

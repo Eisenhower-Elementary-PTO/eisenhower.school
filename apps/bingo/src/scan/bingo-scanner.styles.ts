@@ -334,7 +334,8 @@ export const scannerStyles = css`
     justify-content: center;
   }
 
-  button.next {
+  button.next,
+  button.toggle {
     flex: none;
     width: 3.4em;
     aspect-ratio: 1;
@@ -348,6 +349,49 @@ export const scannerStyles = css`
     border: 2px solid var(--line);
     color: inherit;
     cursor: pointer;
+  }
+
+  .viewfinder[hidden] {
+    display: none;
+  }
+
+  /* ── called numbers: 15 rows x B-I-N-G-O columns, called ones filled ── */
+
+  .called-board {
+    flex: 1 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: auto repeat(15, minmax(1.6em, 1fr));
+    gap: 0.25em;
+    cursor: default;
+  }
+
+  .called-board .letter {
+    text-align: center;
+    font-weight: 800;
+    color: var(--red);
+  }
+
+  :host([data-verdict]) .called-board .letter {
+    color: inherit;
+  }
+
+  .called-board .num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.4em;
+    border: 2px solid var(--line);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.55;
+  }
+
+  .called-board .num.on {
+    background: var(--good);
+    border-color: var(--good);
+    color: #fff;
+    opacity: 1;
   }
 
   .spinner {
