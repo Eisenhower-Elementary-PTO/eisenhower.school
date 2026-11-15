@@ -62,6 +62,7 @@ export class BingoScanner extends LitElement {
   private workCanvas = document.createElement("canvas");
   private readCursor = 0;
   private busy = false;
+  private starting = false;
   private idleCount = 0;
   private scanCount = 0;
   /** The last aligned fit; scanning near it is far cheaper than from scratch. */
@@ -139,7 +140,11 @@ export class BingoScanner extends LitElement {
   // ── camera plumbing ──────────────────────────────────────────────────────
 
   private async startCamera(): Promise<void> {
-    if (this.stream) return;
+    // `starting` closes the await below: iOS fires visibilitychange around its
+    // permission and app-switch moments, and two overlapping starts each made
+    // a timer, leaking one (measured: ticks every ~150ms at a 300ms interval).
+    if (this.stream || this.starting) return;
+    this.starting = true;
     this.cameraError = false;
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -149,6 +154,8 @@ export class BingoScanner extends LitElement {
     } catch {
       this.cameraError = true;
       return;
+    } finally {
+      this.starting = false;
     }
     await this.updateComplete;
     const video = this.videoEl;
@@ -159,6 +166,7 @@ export class BingoScanner extends LitElement {
     } catch {
       // Autoplay refusals surface as a black viewfinder; the photo path remains.
     }
+    if (this.scanTimer !== null) clearInterval(this.scanTimer);
     this.scanTimer = window.setInterval(() => this.tick(), SCAN_INTERVAL_MS);
   }
 

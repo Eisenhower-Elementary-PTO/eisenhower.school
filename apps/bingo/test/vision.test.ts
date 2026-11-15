@@ -242,6 +242,39 @@ describe("scanCard tracking", () => {
       same(full, scanCard(img, shift(full.lattice, -0.03, 0.03)));
     });
   }
+  // The card moving between frames: warp a fixture (scale about its centre,
+  // then translate) and track from the UNMOVED fit. A tracked lock that slips
+  // a row still passes the quality gate, so it must agree with the full search.
+  const warp = (src: Rgba, s: number, tx: number, ty: number): Rgba => {
+    const { width: w, height: h } = src;
+    const out = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const sx = Math.round((x - w / 2 - tx * w) / s + w / 2), sy = Math.round((y - h / 2 - ty * h) / s + h / 2);
+        const o = (y * w + x) * 4;
+        const inside = sx >= 0 && sy >= 0 && sx < w && sy < h;
+        const i = (sy * w + sx) * 4;
+        out[o] = inside ? (src.data[i] ?? 0) : 60;
+        out[o + 1] = inside ? (src.data[i + 1] ?? 0) : 60;
+        out[o + 2] = inside ? (src.data[i + 2] ?? 0) : 60;
+        out[o + 3] = 255;
+      }
+    }
+    return { data: out, width: w, height: h };
+  };
+  for (const name of ALL) {
+    it(`finds ${name} again after the card moves between frames`, () => {
+      const img = fixture(name);
+      const hint = scanCard(img).lattice;
+      for (const [s, tx, ty] of [[1, 0, 0.08], [1.1, 0, 0.1], [1, 0.05, 0.02]] as const) {
+        const frame = warp(img, s, tx, ty);
+        const full = scanCard(frame), tracked = scanCard(frame, hint);
+        expect(Math.abs(tracked.lattice.y0 - full.lattice.y0)).toBeLessThan(0.01);
+        expect(Math.abs(tracked.lattice.py - full.lattice.py)).toBeLessThan(0.01);
+        expect(tracked.cells.map((c) => c.state)).toEqual(full.cells.map((c) => c.state));
+      }
+    });
+  }
   it("recovers from a hint that is nowhere near the card", () => {
     const img = fixture("fix-open.jpg");
     const full = scanCard(img);
