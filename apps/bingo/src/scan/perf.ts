@@ -31,6 +31,7 @@ export class PerfStats {
   private lastTickAt = 0;
   private ticks = 0;
   private aligned = 0;
+  private idle = 0;
 
   record(name: string, ms: number): void {
     let s = this.series.get(name);
@@ -49,6 +50,10 @@ export class PerfStats {
     if (ok) this.aligned++;
   }
 
+  noteIdle(): void {
+    this.idle++;
+  }
+
   report(): string {
     const row = (label: string, key: string, unit = "ms"): string => {
       const s = this.series.get(key);
@@ -62,7 +67,7 @@ export class PerfStats {
       row("per cell", "cell"),
       row("total", "total"),
       row("gap", "gap"),
-      `ticks ${this.ticks}  aligned ${this.aligned}`,
+      `ticks ${this.ticks}  aligned ${this.aligned}  idle ${this.idle}`,
     ].join("\n");
   }
 }
