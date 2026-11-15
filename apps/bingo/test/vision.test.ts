@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { decode } from "jpeg-js";
 import { describe, expect, it } from "vitest";
-import { scanCard, MIN_GRID_QUALITY, type Rgba, type CellState } from "../src/scan/vision.js";
+import { scanCard, MIN_GRID_QUALITY, type LatticeHint, type Rgba, type CellState } from "../src/scan/vision.js";
 import { readCell } from "../src/scan/reader.js";
 import { CardFusion } from "../src/scan/fusion.js";
 import { checkCard } from "../src/scan/check.js";
@@ -216,5 +216,35 @@ describe("checkCard (shutters ignored: do the numbers make a line?)", () => {
     const res = checkCard(numbers, [24, 17, 27, 19, 26]);
     expect(res.lines).toContainEqual([1, 6, 11, 16, 21]);
     expect(res.readable).toBe(true);
+  });
+});
+
+// Tracking: scanning near the last frame's fit must find the same grid the
+// full search does, from the exact fit or a hand-shake away from it, and a
+// bad hint must fall back to the full search rather than trap the scan.
+describe("scanCard tracking", () => {
+  const ALL = [...FIXTURES.map((f) => f.name), ...NEW_FIXTURES.map((f) => f.name)];
+  const shift = (l: LatticeHint, dx: number, dy: number): LatticeHint => ({ ...l, x0: l.x0 + dx, y0: l.y0 + dy });
+  const same = (a: ReturnType<typeof scanCard>, b: ReturnType<typeof scanCard>): void => {
+    expect(b.cells.map((c) => c.state)).toEqual(a.cells.map((c) => c.state));
+    expect(Math.abs(b.gridQuality - a.gridQuality)).toBeLessThan(0.05);
+    for (let i = 0; i < 25; i++) {
+      expect(Math.abs((b.cells[i]?.cx ?? 0) - (a.cells[i]?.cx ?? 0))).toBeLessThan(0.02);
+      expect(Math.abs((b.cells[i]?.cy ?? 0) - (a.cells[i]?.cy ?? 0))).toBeLessThan(0.02);
+    }
+  };
+  for (const name of ALL) {
+    it(`tracks ${name} from its own fit and from a shaken one`, () => {
+      const img = fixture(name);
+      const full = scanCard(img);
+      same(full, scanCard(img, full.lattice));
+      same(full, scanCard(img, shift(full.lattice, 0.02, -0.02)));
+      same(full, scanCard(img, shift(full.lattice, -0.03, 0.03)));
+    });
+  }
+  it("recovers from a hint that is nowhere near the card", () => {
+    const img = fixture("fix-open.jpg");
+    const full = scanCard(img);
+    same(full, scanCard(img, { x0: 0.2, y0: 0.9, px: 0.17, py: 0.13 }));
   });
 });
