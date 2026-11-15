@@ -123,38 +123,49 @@ export function downscale(src: Rgba, targetW: number): Rgba {
   return { data: out, width: targetW, height: targetH };
 }
 
-function toHsv(r: number, g: number, b: number): [number, number, number] {
-  const rf = r / 255, gf = g / 255, bf = b / 255;
-  const max = Math.max(rf, gf, bf), min = Math.min(rf, gf, bf);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === rf) h = ((gf - bf) / d) % 6;
-    else if (max === gf) h = (bf - rf) / d + 2;
-    else h = (rf - gf) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return [h, max === 0 ? 0 : d / max, max];
-}
-
 function computePlanes(img: Rgba): Planes {
   const { width: w, height: h, data } = img;
   const n = w * h;
   const hue = new Float32Array(n), sat = new Float32Array(n), val = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const [hh, ss, vv] = toHsv(data[i * 4] ?? 0, data[i * 4 + 1] ?? 0, data[i * 4 + 2] ?? 0);
-    hue[i] = hh; sat[i] = ss; val[i] = vv;
+    // HSV inline: this runs for every pixel of every frame, and a returned
+    // tuple per pixel was ~180k short-lived arrays a tick for the GC.
+    const rf = (data[i * 4] ?? 0) / 255, gf = (data[i * 4 + 1] ?? 0) / 255, bf = (data[i * 4 + 2] ?? 0) / 255;
+    const max = Math.max(rf, gf, bf), d = max - Math.min(rf, gf, bf);
+    let hh = 0;
+    if (d !== 0) {
+      if (max === rf) hh = ((gf - bf) / d) % 6;
+      else if (max === gf) hh = (bf - rf) / d + 2;
+      else hh = (rf - gf) / d + 4;
+      hh *= 60;
+      if (hh < 0) hh += 360;
+    }
+    hue[i] = hh;
+    sat[i] = max === 0 ? 0 : d / max;
+    val[i] = max;
   }
   // Board brightness reference: median value over every non-red pixel. The
   // card fills the guide and the board is most of it, so the median is the
   // board whatever the model's layout (plates, ink and glare are minorities).
-  const vs: number[] = [];
+  // Value is the max channel / 255, so it takes only 256 distinct values: a
+  // histogram finds the same median a sort would, without sorting ~60k floats.
+  const hist = new Uint32Array(256);
+  let count = 0;
   for (let i = 0; i < n; i += 3) {
-    if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) vs.push(val[i] ?? 0);
+    if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) {
+      hist[Math.round((val[i] ?? 0) * 255)]++;
+      count++;
+    }
   }
-  vs.sort((a, b) => a - b);
-  const vBoard = vs[(vs.length / 2) | 0] ?? 0.8;
+  let vBoard = 0.8;
+  if (count > 0) {
+    const target = (count / 2) | 0;
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += hist[v] ?? 0;
+      if (seen > target) { vBoard = Math.fround(v / 255); break; }
+    }
+  }
   return { w, h, hue, sat, val, vBoard };
 }
 
