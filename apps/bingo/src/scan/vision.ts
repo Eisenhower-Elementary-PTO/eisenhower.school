@@ -58,7 +58,21 @@ export interface LatticeHint {
   y0: number;
   px: number;
   py: number;
+  /** The fit's own gridQuality. A track that scores clearly worse than the
+   *  fit it started from has probably slipped (see TRACK_DROP). */
+  quality?: number;
 }
+
+/** How far below the previous frame's quality a tracked fit may fall before
+ *  it is distrusted and the whole frame is searched instead. A track that
+ *  slips a row still passes MIN_GRID_QUALITY (rows repeat), but measured on
+ *  the fixtures with the card shifted 8% down it scored 0.13 to 0.20 lower
+ *  than the true fit; honest frame-to-frame noise is well under this. */
+const TRACK_DROP = 0.08;
+
+/** How far (fraction of the frame) a track looks from the last fit. Under half
+ *  a row pitch (~0.145 of the height) so it can't hop a row by itself. */
+const TRACK_REACH = 0.06;
 
 export interface CardScan {
   cells: CellResult[];
@@ -153,7 +167,8 @@ function computePlanes(img: Rgba): Planes {
   let count = 0;
   for (let i = 0; i < n; i += 3) {
     if (!isRed(hue[i] ?? 0, sat[i] ?? 0, val[i] ?? 0)) {
-      hist[Math.round((val[i] ?? 0) * 255)]++;
+      const bin = Math.round((val[i] ?? 0) * 255);
+      hist[bin] = (hist[bin] ?? 0) + 1;
       count++;
     }
   }
@@ -268,7 +283,10 @@ export function scanCard(region: Rgba, hint?: LatticeHint | null): CardScan {
   const tracked = scanOnce(region, hint ?? null);
   // A track the quality gate rejects (card moved far, or a different card)
   // is re-found from scratch, so tracking can only ever save work.
-  if (hint && tracked.gridQuality < MIN_GRID_QUALITY) return scanOnce(region, null);
+  if (hint) {
+    const floor = Math.max(MIN_GRID_QUALITY, (hint.quality ?? 0) - TRACK_DROP);
+    if (tracked.gridQuality < floor) return scanOnce(region, null);
+  }
   return tracked;
 }
 
@@ -319,10 +337,10 @@ function scanOnce(region: Rgba, hint: LatticeHint | null): CardScan {
     const rNow = near ? near.py / near.px : 0;
     const rLo = near ? Math.max(0.72, rNow - 0.04) : 0.72;
     const rHi = near ? Math.min(0.8801, rNow + 0.04) : 0.8801;
-    const yLo = near ? near.y0 - 0.04 * h : 0.3 * h;
-    const yHi = near ? near.y0 + 0.04 * h : 0.65 * h;
-    const xLo = near ? near.x0 - 0.04 * w : 0.42 * w;
-    const xHi = near ? near.x0 + 0.04 * w : 0.6 * w;
+    const yLo = near ? near.y0 - TRACK_REACH * h : 0.3 * h;
+    const yHi = near ? near.y0 + TRACK_REACH * h : 0.65 * h;
+    const xLo = near ? near.x0 - TRACK_REACH * w : 0.42 * w;
+    const xHi = near ? near.x0 + TRACK_REACH * w : 0.6 * w;
     for (let pxF = pxLo; pxF <= pxHi; pxF += 0.005) {
       for (let ratio = rLo; ratio <= rHi; ratio += 0.04) {
         const px = pxF * w, py = px * ratio;
@@ -414,6 +432,8 @@ function scanOnce(region: Rgba, hint: LatticeHint | null): CardScan {
       cells.push({ row: r, col: c, cx: cx / p.w, cy: cy / p.h, redFrac, state, quality });
     }
   }
-  const lattice: LatticeHint = { x0: best.x0 / w, y0: best.y0 / h, px: best.px / w, py: best.py / h };
+  const lattice: LatticeHint = {
+    x0: best.x0 / w, y0: best.y0 / h, px: best.px / w, py: best.py / h, quality: qualitySum / 25,
+  };
   return { cells, lattice, gridQuality: qualitySum / 25, uncertain, winW: ww / w, winH: wh / h };
 }
