@@ -1113,7 +1113,7 @@ function renderVisibleNode(node: NewsletterNode, ctx: Ctx): string {
       const { inner, col } = qrBlock(ctx, () => renderChildren(node.content, ctx));
       // An empty paragraph is deliberate vertical space in the editor; keep it.
       if (!inner) return `<p${attr(ctx, "nl-p", "margin:0 0 16px;height:8px")}></p>`;
-      return `<p${attr(ctx, "nl-p", `margin:0 0 16px;font-size:14px;line-height:1.65;color:${INK};font-family:${FONT}`)}>${col}${inner}</p>`;
+      return `<p${attr(ctx, "nl-p", `margin:0 0 16px;font-size:14px;line-height:1.32;color:${INK};font-family:${FONT}`)}>${col}${inner}</p>`;
     }
     case "heading": {
       const level = (node.attrs as { level?: number } | undefined)?.level ?? 2;
@@ -1123,9 +1123,9 @@ function renderVisibleNode(node: NewsletterNode, ctx: Ctx): string {
       return `<h${level}${attr(ctx, `nl-h${level}`, `margin:${top}px 0 12px;font-size:${size}px;line-height:1.3;font-weight:700;color:${INK};font-family:${FONT}`)}>${col}${inner}</h${level}>`;
     }
     case "bulletList":
-      return `<ul${attr(ctx, "nl-ul", `margin:0 0 16px;padding-left:22px;font-size:14px;line-height:1.65;color:${INK};font-family:${FONT}`)}>${renderChildren(node.content, ctx)}</ul>`;
+      return `<ul${attr(ctx, "nl-ul", `margin:0 0 16px;padding-left:22px;font-size:14px;line-height:1.32;color:${INK};font-family:${FONT}`)}>${renderChildren(node.content, ctx)}</ul>`;
     case "orderedList":
-      return `<ol${attr(ctx, "nl-ol", `margin:0 0 16px;padding-left:22px;font-size:14px;line-height:1.65;color:${INK};font-family:${FONT}`)}>${renderChildren(node.content, ctx)}</ol>`;
+      return `<ol${attr(ctx, "nl-ol", `margin:0 0 16px;padding-left:22px;font-size:14px;line-height:1.32;color:${INK};font-family:${FONT}`)}>${renderChildren(node.content, ctx)}</ol>`;
     case "listItem": {
       // TipTap wraps each item's text in a paragraph; unwrap the single-child
       // case so list items don't inherit the paragraph's bottom margin.
@@ -1829,7 +1829,7 @@ export const NEWSLETTER_PRINT_RULES = `
   .nl-screen-only{display:none}
   .nl-print-only{display:contents}
   .nl-title{font-size:26px}
-  .nl-p,.nl-ul,.nl-ol{font-size:10.5pt;line-height:1.55}
+  .nl-p,.nl-ul,.nl-ol{font-size:10.5pt;line-height:1.24}
   /* Don't strand a heading or an event row at the foot of a page. */
   .nl-h1,.nl-h2,.nl-h3,.nl-events-heading{break-after:avoid;page-break-after:avoid}
   .nl-event,.nl-li,.nl-img,.nl-quote,.nl-fig,.nl-table tr{break-inside:avoid;page-break-inside:avoid}
@@ -1883,11 +1883,11 @@ a{color:var(--nl-accent,${DEFAULT_ACCENT})}
 .nl-subtitle{margin:6px 0 0;font-size:16px;color:${MUTED}}
 .nl-date{margin:10px 0 0;font-size:13px;color:${MUTED}}
 .nl-body{margin-top:26px}
-.nl-p{margin:0 0 16px;font-size:15px;line-height:1.7}
+.nl-p{margin:0 0 16px;font-size:15px;line-height:1.36}
 .nl-h1{margin:0 0 12px;font-size:26px;line-height:1.3;font-weight:700}
 .nl-h2{margin:28px 0 12px;font-size:21px;line-height:1.3;font-weight:700}
 .nl-h3{margin:28px 0 12px;font-size:17px;line-height:1.3;font-weight:700}
-.nl-ul,.nl-ol{margin:0 0 16px;padding-left:22px;font-size:15px;line-height:1.7}
+.nl-ul,.nl-ol{margin:0 0 16px;padding-left:22px;font-size:15px;line-height:1.36}
 .nl-li{margin:0 0 6px}
 .nl-fs-small{font-size:${NEWSLETTER_FONT_SIZES.small}em}
 .nl-fs-large{font-size:${NEWSLETTER_FONT_SIZES.large}em}
