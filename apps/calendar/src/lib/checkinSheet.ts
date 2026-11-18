@@ -63,22 +63,23 @@ ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
   body { font: 14px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; color: #000; margin: 0; }
   h1 { font-size: 22px; margin: 0; }
   .meta { color: #333; margin: 2px 0 14px; }
-  section { margin-bottom: 18px; break-inside: avoid; }
-  h2 { font-size: 15px; margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 2px; }
+  .cols { column-count: 2; column-gap: 0.35in; column-rule: 1px solid #ccc; }
+  section { margin-bottom: 14px; break-inside: avoid; }
+  h2 { font-size: 14px; flex-wrap: wrap; margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 2px; }
   h2 small { font-weight: 400; color: #333; font-size: 13px; }
   .count { margin-left: auto; font-weight: 400; font-size: 12px; }
   .desc { margin: 2px 0 4px; font-size: 12px; color: #333; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #444; padding: 3px 6px; }
-  td { border-bottom: 1px solid #999; padding: 8px 6px; height: 34px; vertical-align: middle; }
-  .box { width: 34px; } .arr { width: 90px; } .sig { width: 90px; }
+  th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; color: #444; padding: 3px 6px; }
+  td { border-bottom: 1px solid #999; padding: 4px 5px; height: 30px; vertical-align: middle; }
+  .box { width: 28px; } .arr { width: 56px; } .sig { width: 56px; }
   td.box span { display: inline-block; width: 18px; height: 18px; border: 1.5px solid #000; }
   .note { font-size: 11px; color: #444; }
   .foot { margin-top: 10px; font-size: 11px; color: #555; }
 </style></head><body>
 <h1>${esc(sheet.event.title)}</h1>
 <div class="meta">${esc(when)}${eventTime ? ` · ${esc(eventTime)}` : ""}${sheet.event.location ? ` · ${esc(sheet.event.location)}` : ""} — Volunteer check-in</div>
-${sections || "<p>No positions on this sheet yet.</p>"}
+${sections ? `<div class="cols">${sections}</div>` : "<p>No positions on this sheet yet.</p>"}
 <div class="foot">Printed ${esc(new Date().toLocaleString())}. Contains volunteer names — please don’t post.</div>
 <script>window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 150); });</script>
 </body></html>`;
