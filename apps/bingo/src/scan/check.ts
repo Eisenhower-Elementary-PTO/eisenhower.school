@@ -20,6 +20,12 @@ export interface CheckResult {
   verdicts: CellVerdict[];
   /** Winning lines, as arrays of 5 cell indices. */
   lines: number[][];
+  /** Near misses on a card with no bingo: for the line(s) closest to winning,
+   *  the called-list numbers that are missing — only lines of ONE or TWO
+   *  missing numbers where every other square is read and called. Each entry is
+   *  one line's missing set (ascending); empty on a win or when nothing is
+   *  within two. Ties at the best distance are all listed (capped). */
+  near: number[][];
   /** True once the answer is final: a win, or no line can still win. */
   readable: boolean;
 }
@@ -50,5 +56,22 @@ export function checkCard(numbers: (number | null)[], called: number[]): CheckRe
   // Every line is ruled out by a square we read and that wasn't called.
   const allBlocked = LINES.every((line) => line.some((i) => verdicts[i] === "open"));
 
-  return { verdicts, lines, readable: lines.length > 0 || allBlocked };
+  return { verdicts, lines, near: lines.length > 0 ? [] : nearMisses(verdicts, numbers), readable: lines.length > 0 || allBlocked };
+}
+
+const MAX_NEAR = 3;
+
+/** Lines that are one or two numbers short, closest first. A line with a square
+ *  not yet read is skipped: "missing" is only claimed about numbers we SAW. */
+function nearMisses(verdicts: CellVerdict[], numbers: (number | null)[]): number[][] {
+  const sets: number[][] = [];
+  for (const line of LINES) {
+    if (line.some((i) => verdicts[i] === "uncertain")) continue;
+    const open = line.filter((i) => verdicts[i] === "open");
+    if (open.length < 1 || open.length > 2) continue;
+    const missing = open.map((i) => numbers[i] as number).sort((a, b) => a - b);
+    if (!sets.some((s) => s.length === missing.length && s.every((n, k) => n === missing[k]))) sets.push(missing);
+  }
+  const best = Math.min(...sets.map((s) => s.length));
+  return sets.filter((s) => s.length === best).slice(0, MAX_NEAR);
 }

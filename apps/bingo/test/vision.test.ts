@@ -210,6 +210,30 @@ describe("checkCard (shutters ignored: do the numbers make a line?)", () => {
     expect(res.verdicts[1]).toBe("uncertain");
   });
 
+  it("names the one number a nearly-complete line is missing", () => {
+    const res = checkCard(OPEN_NUMBERS, [24, 17, 27, 19]); // column 1 minus 26
+    expect(res.lines).toEqual([]);
+    expect(res.near).toEqual([[26]]);
+  });
+
+  it("names two when that is as close as the card gets, and nothing when it is further", () => {
+    expect(checkCard(OPEN_NUMBERS, [24, 17, 27]).near).toEqual([[19, 26]]);
+    expect(checkCard(OPEN_NUMBERS, [24, 17]).near).toEqual([]);
+  });
+
+  it("reports only the closest distance, and no near misses on a win", () => {
+    // Column 1 is one short (26); a second line two short must not be listed.
+    const res = checkCard(OPEN_NUMBERS, [24, 17, 27, 19, 7]);
+    expect(res.near).toEqual([[26]]);
+    expect(checkCard(OPEN_NUMBERS, [24, 17, 27, 19, 26]).near).toEqual([]);
+  });
+
+  it("never claims a number missing from a line that still has an unread square", () => {
+    const numbers: (number | null)[] = [...OPEN_NUMBERS];
+    numbers[21] = null; // 26's square unread: the line is unknown, not "missing 26"
+    expect(checkCard(numbers, [24, 17, 27, 19]).near).toEqual([]);
+  });
+
   it("calls a win even while other squares are unread", () => {
     const numbers: (number | null)[] = [...OPEN_NUMBERS];
     numbers[0] = null; // unrelated to column 1

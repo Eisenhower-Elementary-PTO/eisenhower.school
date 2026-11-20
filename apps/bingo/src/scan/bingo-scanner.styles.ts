@@ -334,6 +334,27 @@ export const scannerStyles = css`
     justify-content: center;
   }
 
+  .games {
+    display: flex;
+    gap: 0.4em;
+  }
+
+  .games button {
+    flex: 1;
+    padding: 0.45em 0.6em;
+    border-radius: 0.6em;
+    background: none;
+    border: 2px solid var(--line);
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .games button.on {
+    border-color: currentColor;
+  }
+
   button.next,
   button.toggle {
     flex: none;

@@ -1009,6 +1009,7 @@ export interface Strings {
   bingoScanReading: string; // uses {done} {total}
   bingoScanBingo: string;
   bingoScanClean: string;
+  bingoScanMissing: string; // uses {missing}
   bingoScanCamera: string;
   bingoScanFixHint: string;
   bingoScanNext: string;
@@ -1018,6 +1019,9 @@ export interface Strings {
   bingoScanShowScan: string;
   bingoScanCalledCount: string; // uses {count} {total}
   bingoScanCalledNone: string;
+  bingoScanGameCurrent: string;
+  bingoScanGamePrevious: string;
+  bingoScanPreviousNote: string; // uses {time}
 }
 
 const en: Strings = {
@@ -1936,6 +1940,7 @@ const en: Strings = {
   bingoScanReading: "Reading the card — hold steady ({done}/{total})",
   bingoScanBingo: "BINGO — this card's numbers win!",
   bingoScanClean: "No bingo — this card's numbers don't make a line.",
+  bingoScanMissing: "No bingo — missing {missing}",
   bingoScanCamera: "Camera unavailable — allow camera access and try again.",
   bingoScanFixHint: "Tap a square to fix a misread number.",
   bingoScanNext: "Next card",
@@ -1945,6 +1950,9 @@ const en: Strings = {
   bingoScanShowScan: "Back to card scan",
   bingoScanCalledCount: "{count} of {total} numbers called",
   bingoScanCalledNone: "No numbers called yet",
+  bingoScanGameCurrent: "Current game",
+  bingoScanGamePrevious: "Previous game",
+  bingoScanPreviousNote: "Checking the game that just ended ({time})",
 };
 
 const es: Strings = {
@@ -2807,6 +2815,7 @@ const es: Strings = {
   bingoScanReading: "Leyendo el cartón — mantén firme la cámara ({done}/{total})",
   bingoScanBingo: "¡BINGO! Este cartón gana.",
   bingoScanClean: "Sin bingo: los números de este cartón no forman línea.",
+  bingoScanMissing: "Sin bingo: falta {missing}",
   bingoScanCamera: "Cámara no disponible — permite el acceso a la cámara e inténtalo de nuevo.",
   bingoScanFixHint: "Toca una casilla para corregir un número mal leído.",
   bingoScanNext: "Siguiente cartón",
@@ -2816,6 +2825,9 @@ const es: Strings = {
   bingoScanShowScan: "Volver a revisar cartones",
   bingoScanCalledCount: "{count} de {total} números cantados",
   bingoScanCalledNone: "Aún no se ha cantado ningún número",
+  bingoScanGameCurrent: "Juego actual",
+  bingoScanGamePrevious: "Juego anterior",
+  bingoScanPreviousNote: "Revisando el juego que acaba de terminar ({time})",
 };
 
 const zh: Strings = {
@@ -3640,6 +3652,7 @@ const zh: Strings = {
   bingoScanReading: "正在读取卡片 — 请拿稳（{done}/{total}）",
   bingoScanBingo: "BINGO！这张卡赢了。",
   bingoScanClean: "没有宾果 — 这张卡的数字连不成一条线。",
+  bingoScanMissing: "没有宾果 — 还差 {missing}",
   bingoScanCamera: "无法使用相机 — 请允许相机权限后重试。",
   bingoScanFixHint: "点按格子可更正读错的数字。",
   bingoScanNext: "下一张卡",
@@ -3649,6 +3662,9 @@ const zh: Strings = {
   bingoScanShowScan: "返回卡片核对",
   bingoScanCalledCount: "已叫 {count} / {total} 个号码",
   bingoScanCalledNone: "还没有叫号",
+  bingoScanGameCurrent: "当前游戏",
+  bingoScanGamePrevious: "上一局",
+  bingoScanPreviousNote: "正在核对刚结束的一局（{time}）",
 };
 
 const so: Strings = {
@@ -4569,6 +4585,7 @@ const so: Strings = {
   bingoScanReading: "Kaarka waa la akhrinayaa — xasili kamerada ({done}/{total})",
   bingoScanBingo: "BINGO — kaarkan waa guuleystay!",
   bingoScanClean: "Bingo ma jiro — tirooyinka kaarkan xariiq ma sameeyaan.",
+  bingoScanMissing: "Bingo ma jiro — waa ka maqan yahay {missing}",
   bingoScanCamera: "Kamerada lama heli karo — ogolow kamerada kadibna isku day mar kale.",
   bingoScanFixHint: "Taabo sanduuq si aad u saxdo lambar si khaldan loo akhriyay.",
   bingoScanNext: "Kaarka xiga",
@@ -4578,6 +4595,9 @@ const so: Strings = {
   bingoScanShowScan: "Ku laabo hubinta kaarka",
   bingoScanCalledCount: "{count} ka mid ah {total} tiro ayaa la yeeray",
   bingoScanCalledNone: "Weli tiro lama yeerin",
+  bingoScanGameCurrent: "Ciyaarta hadda",
+  bingoScanGamePrevious: "Ciyaartii hore",
+  bingoScanPreviousNote: "Waxaa la hubinayaa ciyaartii hadda dhammaatay ({time})",
 };
 
 export const dictionaries: Record<Locale, Strings> = { en, es, zh, so };

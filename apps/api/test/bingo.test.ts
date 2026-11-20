@@ -18,7 +18,7 @@ import { UnauthorizedError } from "../src/middleware/session.js";
 
 /** Every key an anonymous caller may see. Changing this list is a deliberate
  *  act — confirm a new field is genuinely safe for a logged-out stranger. */
-const PUBLIC_KEYS = ["currentNumber", "markedNumbers", "updatedAt"].sort();
+const PUBLIC_KEYS = ["currentNumber", "markedNumbers", "previous", "updatedAt"].sort();
 
 interface Executed {
   sql: string;
@@ -27,7 +27,14 @@ interface Executed {
 
 /** D1 stand-in: one SELECT shape, one INSERT shape, statements recorded where
  *  they EXECUTE (run), not where they're prepared. */
-function testEnv(row: { marked_numbers: string; current_number: number | null; updated_at: string } | null) {
+type Row = {
+  marked_numbers: string;
+  current_number: number | null;
+  updated_at: string;
+  previous_marked_numbers?: string | null;
+  previous_ended_at?: string | null;
+};
+function testEnv(row: Row | null) {
   const executed: Executed[] = [];
   const env = {
     DB: {
@@ -103,7 +110,7 @@ describe("GET /bingo-public/state", () => {
     const res = await app.request("/bingo-public/state", {}, testEnv(null).env);
     expect(res.status).toBe(200);
     const { state } = (await res.json()) as { state: Record<string, unknown> };
-    expect(state).toEqual({ markedNumbers: [], currentNumber: null, updatedAt: null });
+    expect(state).toEqual({ markedNumbers: [], currentNumber: null, updatedAt: null, previous: null });
   });
 
   it("survives rotted JSON in the row — an empty board, mid-game, not a 500", async () => {
@@ -181,6 +188,66 @@ describe("PUT /bingo/state", () => {
     }
     expect(executed).toEqual([]);
     expect(drafts).toEqual([]);
+  });
+});
+
+describe("keeping the cleared game (migration 0047)", () => {
+  const BIG = {
+    marked_numbers: "[5,20,33,48,61,7]",
+    current_number: 7,
+    updated_at: "2026-10-30T01:00:00.000Z",
+  };
+  const clear = { markedNumbers: [], currentNumber: null };
+
+  it("clearing a real game archives its call list, in order, and answers with it", async () => {
+    const { env, executed } = testEnv(BIG);
+    const { app } = appWith(auth());
+    const res = await app.request("/bingo/state", put(clear), env);
+    expect(executed).toHaveLength(1);
+    expect(executed[0]!.binds[4]).toBe("[5,20,33,48,61,7]");
+    expect(executed[0]!.binds[5]).toBe(executed[0]!.binds[3]); // endedAt = the write's own timestamp
+    const { state } = (await res.json()) as { state: { previous: { markedNumbers: number[] } | null } };
+    expect(state.previous?.markedNumbers).toEqual([5, 20, 33, 48, 61, 7]);
+  });
+
+  it("ordinary taps pass NULL so the kept game is left alone", async () => {
+    const { env, executed } = testEnv({ ...BIG, previous_marked_numbers: "[1,2,3,4]", previous_ended_at: "2026-10-29T00:00:00.000Z" });
+    const { app } = appWith(auth());
+    await app.request("/bingo/state", put({ markedNumbers: [5, 20, 33, 48, 61, 7, 9], currentNumber: 9 }), env);
+    expect(executed[0]!.binds.slice(4)).toEqual([null, null]);
+    expect(executed[0]!.sql).toContain("COALESCE(?, previous_marked_numbers)");
+  });
+
+  it("a second clear of an already-empty board writes nothing — the kept game survives a double tap", async () => {
+    const { env, executed } = testEnv({
+      marked_numbers: "[]", current_number: null, updated_at: "2026-10-30T01:00:00.000Z",
+      previous_marked_numbers: "[5,20,33,48,61,7]", previous_ended_at: "2026-10-30T01:00:00.000Z",
+    });
+    const { app } = appWith(auth());
+    await app.request("/bingo/state", put(clear), env);
+    expect(executed).toEqual([]);
+  });
+
+  it("clearing a barely-started board (a stray tap) does not replace the kept game", async () => {
+    const { env, executed } = testEnv({
+      marked_numbers: "[12]", current_number: 12, updated_at: "2026-10-30T01:00:00.000Z",
+      previous_marked_numbers: "[5,20,33,48,61,7]", previous_ended_at: "2026-10-29T00:00:00.000Z",
+    });
+    const { app } = appWith(auth());
+    await app.request("/bingo/state", put(clear), env);
+    expect(executed[0]!.binds.slice(4)).toEqual([null, null]);
+  });
+
+  it("the public GET serves the kept game, numbers and a time only", async () => {
+    const { app } = appWith(null);
+    const res = await app.request(
+      "/bingo-public/state",
+      {},
+      testEnv({ ...BIG, marked_numbers: "[]", current_number: null, previous_marked_numbers: "[5,20,33,48]", previous_ended_at: "2026-10-30T01:05:00.000Z" }).env,
+    );
+    const { state } = (await res.json()) as { state: { previous: Record<string, unknown> } };
+    expect(Object.keys(state.previous).sort()).toEqual(["endedAt", "markedNumbers"]);
+    expect(state.previous.markedNumbers).toEqual([5, 20, 33, 48]);
   });
 });
 

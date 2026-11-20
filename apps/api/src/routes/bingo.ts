@@ -10,7 +10,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../env.js";
 import { requireAuth } from "../middleware/session.js";
-import { normalizeBingoInput, readBingoState, sameBingoState, writeBingoState } from "../lib/bingo.js";
+import { endsArchivableGame, normalizeBingoInput, readBingoState, sameBingoState, writeBingoState } from "../lib/bingo.js";
 
 export const bingo = new Hono<HonoEnv>();
 
@@ -30,7 +30,11 @@ bingo.put("/state", async (c) => {
   const prev = await readBingoState(c.env);
   if (sameBingoState(prev, next)) return c.json({ state: prev });
 
-  const updatedAt = await writeBingoState(c.env, next);
+  // Clearing a real game keeps its call list (migration 0047) so a winner still
+  // in line can be refereed afterwards. Decided here, from the row we just
+  // read, so the rule is testable without a database.
+  const archive = endsArchivableGame(prev, next) ? prev.markedNumbers : null;
+  const updatedAt = await writeBingoState(c.env, next, archive);
   c.var.audit.push({
     action: "bingo.updated",
     entityKind: "bingo",
@@ -39,5 +43,12 @@ bingo.put("/state", async (c) => {
     // about later, and the full list is re-derivable from nothing anyway.
     detail: { marked: next.markedNumbers.length, current: next.currentNumber, was: prev.markedNumbers.length },
   });
-  return c.json({ state: { markedNumbers: next.markedNumbers, currentNumber: next.currentNumber, updatedAt } });
+  return c.json({
+    state: {
+      markedNumbers: next.markedNumbers,
+      currentNumber: next.currentNumber,
+      updatedAt,
+      previous: archive ? { markedNumbers: archive, endedAt: updatedAt } : prev.previous,
+    },
+  });
 });

@@ -2303,6 +2303,17 @@ export interface BingoStateDTO {
   currentNumber: number | null;
   /** Null only before the first game is ever played. */
   updatedAt: string | null;
+  /** The last game that was cleared away, kept so a winner still in line can
+   *  be refereed after the board resets. ONE game, never a history; null until
+   *  a real game has been cleared. */
+  previous: BingoPreviousGameDTO | null;
+}
+
+export interface BingoPreviousGameDTO {
+  /** That game's called numbers, in call order. */
+  markedNumbers: number[];
+  /** When the board was cleared (ISO-8601 UTC). */
+  endedAt: string;
 }
 
 /** PUT /bingo/state — the whole board, replaced. Full state rather than a

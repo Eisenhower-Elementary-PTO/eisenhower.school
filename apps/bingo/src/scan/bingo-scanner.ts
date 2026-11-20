@@ -12,7 +12,8 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, state, query } from "lit/decorators.js";
 import { api } from "../lib/api.js";
-import { t } from "../lib/i18n.js";
+import { formatClock, type BingoPreviousGameDTO } from "@sd/shared";
+import { locale, t } from "../lib/i18n.js";
 import { scanCard, MIN_GRID_QUALITY, type CardScan, type LatticeHint, type Rgba } from "./vision.js";
 import { readCell } from "./reader.js";
 import { CardFusion } from "./fusion.js";
@@ -41,6 +42,10 @@ export class BingoScanner extends LitElement {
   static override styles = scannerStyles;
 
   @state() private called: number[] = [];
+  /** The game cleared most recently, kept by the server (migration 0047). */
+  @state() private previous: BingoPreviousGameDTO | null = null;
+  /** Which call list a card is refereed against. */
+  @state() private against: "current" | "previous" = "current";
   @state() private cameraError = false;
   @state() private scan: CardScan | null = null;
   @state() private result: CheckResult | null = null;
@@ -129,10 +134,11 @@ export class BingoScanner extends LitElement {
       // Ignore an answer older than what we already show.
       if (this.calledAt && state.updatedAt && state.updatedAt < this.calledAt) return;
       this.calledAt = state.updatedAt ?? this.calledAt;
-      const changed =
-        state.markedNumbers.length !== this.called.length ||
-        state.markedNumbers.some((n, i) => n !== this.called[i]);
+      const before = this.callList;
       this.called = state.markedNumbers;
+      this.previous = state.previous;
+      const after = this.callList;
+      const changed = after.length !== before.length || after.some((n, i) => n !== before[i]);
       if (changed) this.refreshVerdict();
     } catch {
       // Offline: keep the last-known called numbers; the next poll retries.
@@ -309,10 +315,42 @@ export class BingoScanner extends LitElement {
     this.refreshVerdict();
   }
 
+  /** The numbers a card is checked against: the live board, or — when the
+   *  checker picked it — the game that was just cleared. */
+  private get callList(): number[] {
+    return this.against === "previous" && this.previous ? this.previous.markedNumbers : this.called;
+  }
+
+  private chooseGame = (which: "current" | "previous") => (e: Event): void => {
+    e.stopPropagation(); // the main-area tap would otherwise wipe the card
+    if (this.against === which) return;
+    this.against = which;
+    this.refreshVerdict();
+  };
+
+  /** Only offered once a game has been cleared; says which list is in force. */
+  private renderGamePicker(): TemplateResult | typeof nothing {
+    if (!this.previous) return nothing;
+    const prev = this.against === "previous";
+    return html`<div class="games" role="group">
+        <button class=${prev ? "" : "on"} aria-pressed=${!prev} @click=${this.chooseGame("current")}>
+          ${t("bingoScanGameCurrent")}
+        </button>
+        <button class=${prev ? "on" : ""} aria-pressed=${prev} @click=${this.chooseGame("previous")}>
+          ${t("bingoScanGamePrevious")}
+        </button>
+      </div>
+      ${prev
+        ? html`<p class="banner hint">
+            ${t("bingoScanPreviousNote", { time: formatClock(this.previous.endedAt, locale) })}
+          </p>`
+        : nothing}`;
+  }
+
   private refreshVerdict(): void {
     this.numbers = this.fusion.numbers();
     this.settled = this.fusion.settledCount();
-    this.result = checkCard(this.fusion.settledNumbers(), this.called);
+    this.result = checkCard(this.fusion.settledNumbers(), this.callList);
   }
 
   /** A tap anywhere rescans the card — except on a number square, where a
@@ -386,6 +424,7 @@ export class BingoScanner extends LitElement {
         ${this.renderViewfinder()}
         <div class="statusrow">
           <div class="statuscol">
+            ${this.renderGamePicker()}
             ${this.mode === "scan" ? this.renderBanner() : this.renderCalledBanner()}
           </div>
           ${this.mode === "scan" ? this.renderNextButton() : nothing}
@@ -456,7 +495,7 @@ export class BingoScanner extends LitElement {
   }
 
   private renderCalledBanner(): TemplateResult {
-    const n = this.called.length;
+    const n = this.callList.length;
     return html`<p class="banner hint">
       ${n === 0 ? t("bingoScanCalledNone") : t("bingoScanCalledCount", { count: n, total: 75 })}
     </p>`;
@@ -464,7 +503,7 @@ export class BingoScanner extends LitElement {
 
   /** Every number on the board, one column per letter, called ones filled. */
   private renderCalled(): TemplateResult {
-    const calledSet = new Set(this.called);
+    const calledSet = new Set(this.callList);
     return html`<div class="called-board">
       ${[..."BINGO"].map((letter) => html`<span class="letter">${letter}</span>`)}
       ${Array.from({ length: 15 }, (_, row) =>
@@ -486,6 +525,11 @@ export class BingoScanner extends LitElement {
       </p>`;
     }
     if (result.lines.length > 0) return html`<p class="banner bingo">${t("bingoScanBingo")}</p>`;
+    if (result.near.length > 0) {
+      // "51", or "51 + 23" for a two-short line; ties joined with " / ".
+      const missing = result.near.map((set) => set.join(" + ")).join(" / ");
+      return html`<p class="banner good">${t("bingoScanMissing", { missing })}</p>`;
+    }
     return html`<p class="banner good">${t("bingoScanClean")}</p>`;
   }
 
