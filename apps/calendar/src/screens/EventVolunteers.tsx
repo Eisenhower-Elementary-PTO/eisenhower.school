@@ -32,6 +32,7 @@ import { useSession } from "../lib/session.js";
 import { useIsDesktop } from "../lib/useIsDesktop.js";
 import { api, errorMessage } from "../lib/api.js";
 import { SCHOOL_TIME_ZONE } from "../lib/timezone.js";
+import { printCheckinSheet } from "../lib/checkinSheet.js";
 
 /** The link to hand out. A sheet no longer has a page of its own — it is read on
  *  its event's page — so this is normally the event's URL, which is also what a
@@ -532,6 +533,13 @@ export function EventVolunteers() {
     }
   };
 
+  /** Opens the printable check-in sheet (names, a tick box per volunteer, blank
+   *  lines for open spots) in a new tab and prints it. */
+  const printCheckin = () => {
+    if (!sheet) return;
+    if (!printCheckinSheet(sheet)) setError("Your browser blocked the print window — allow pop-ups for this site and try again.");
+  };
+
   const copyLink = async () => {
     if (!sheet) return;
     try {
@@ -667,6 +675,11 @@ export function EventVolunteers() {
               drafts too: proofing is wanted before publishing. */}
           <Btn sm kind="secondary" icon="bolt" disabled={busy} onClick={() => void sendTestReminder()}>
             {testSent ? "Test sent to you" : "Send test reminder"}
+          </Btn>
+          {/* Paper for the door on the day: every signed-up name with a box to
+              tick. Built in the browser from the sheet already loaded. */}
+          <Btn sm kind="secondary" icon="download" disabled={busy} onClick={printCheckin}>
+            Create Volunteers Check-in
           </Btn>
           <button aria-label="Delete this sheet" title="Delete this sheet" onClick={() => void removeSheet()} style={{ ...iconBtnStyle, marginLeft: "auto" }}>
             <Icon name="x" size={18} />

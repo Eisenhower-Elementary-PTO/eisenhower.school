@@ -20,6 +20,8 @@ bitten twice.
   can carry its URL directly. Reuses the landing page's resource strings and
   the facts in `_lib/pto.ts`; makes no subrequest. Everything about the
   Center lives only here — the landing page's help grid just links to it.
+- `/board-agenda` — a 302 to the board's agenda Google Doc (`functions/board-agenda.ts`).
+  Temporary on purpose so the Doc can be swapped; not in the sitemap
 - `/robots.txt`, `/sitemap.xml` (a public page added here and not to the
   sitemap's `PUBLIC_PATHS` is one no search engine hears about)
 
