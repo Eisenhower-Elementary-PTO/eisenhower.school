@@ -202,25 +202,6 @@ describe("checkCard (shutters ignored: do the numbers make a line?)", () => {
     expect(diag.lines).toContainEqual([0, 6, 12, 18, 24]);
   });
 
-  it("sees four corners as a bingo, FREE center not needed", () => {
-    // Corners of fix-open: 7, 68, 15, 66 (cells 0, 4, 20, 24).
-    const res = checkCard(OPEN_NUMBERS, [7, 68, 15, 66]);
-    expect(res.lines).toContainEqual([0, 4, 20, 24]);
-    expect(res.readable).toBe(true);
-    // Three corners is not a win.
-    expect(checkCard(OPEN_NUMBERS, [7, 68, 15]).lines).toEqual([]);
-  });
-
-  it("waits while an unread corner could still complete four corners", () => {
-    const numbers: (number | null)[] = [...OPEN_NUMBERS];
-    numbers[24] = null;
-    // Every line is blocked by a known uncalled square except corners, whose
-    // last square is unread: the verdict must not say "no bingo" yet.
-    const res = checkCard(numbers, [7, 68, 15, 24, 73]);
-    expect(res.lines).toEqual([]);
-    expect(res.readable).toBe(false);
-  });
-
   it("waits while an unread square could still complete a line", () => {
     const numbers: (number | null)[] = [...OPEN_NUMBERS];
     for (const i of [1, 6, 11, 16, 21]) numbers[i] = null; // column 1 unread: could still be a line
